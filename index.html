@@ -351,7 +351,7 @@ body:not(.prihlasen) #main-obsah{display:none}
    Čte kolekci "prehled" (plní ji Apps Script z fází 1–3) + zakázky.
    Nic neodesílá ani nezakládá samo — vše je návrh ke schválení.
    ========================================================= */
-const APP_VERSION = 'v0.6';
+const APP_VERSION = 'v0.8';
 
 // ---- Firebase (stejný projekt jako Evidence zakázek) ----
 const firebaseConfig = {
@@ -713,11 +713,19 @@ function karta(p){
   if(p.zakazka) badges+=`<span class="badge" style="background:#eef2f7;color:#1f3864">${esc(p.zakazka)}</span>`;
   if(p.stitek) badges+=`<span class="badge" style="background:#f1f5f9;color:#475569">#${esc(p.stitek)}</span>`;
 
-  // jistota vs. odhad
+  // nepřečtený e-mail = jistota, že je nový a ještě nevyřízený
+  const neprecteno = (p.zdroj==='e-mail' && p.neprecteno==='true');
+  if(neprecteno) badges += '<span class="badge" style="background:#dbeafe;color:#1e40af">🔵 nepřečtený</span>';
+
+  // jistota vs. odhad – nejdřív jistota (nepřečteno), pak zjištění AI; nikdy netvrdí nic natvrdo
   if(p.kategorie==='k odpovědi'){
-    badges += jeCerstve(p)
-      ? '<span class="badge b-uncertain">⏳ možná čerstvě odpovězeno – ověř</span>'
-      : '<span class="badge b-uncertain">❓ vypadá bez odpovědi – ověř</span>';
+    if(!neprecteno){
+      const ap=(p.ai_pozn||'').toLowerCase();
+      const vypadaOdp = ap.includes('odpovězeno') && !ap.includes('bez odpovědi') && !ap.includes('možná');
+      badges += vypadaOdp
+        ? '<span class="badge" style="background:#dcfce7;color:#166534">✓ vypadá odpovězeno – ověř</span>'
+        : '<span class="badge b-uncertain">❓ vypadá bez odpovědi – ověř</span>';
+    }
   } else if(p.kategorie==='čekám'){
     badges += '<span class="badge b-uncertain">⏳ čekám na odpověď (odhad)</span>';
   }
