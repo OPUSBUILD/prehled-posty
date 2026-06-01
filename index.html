@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Přehled pošty 2026</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f0f2f5;color:#1a1a2e;min-height:100vh}
+
+/* ===== HEADER ===== */
+.header{background:linear-gradient(135deg,#1f3864 0%,#2e75b6 100%);color:white;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 12px rgba(0,0,0,0.2);position:sticky;top:0;z-index:100}
+.header h1{font-size:20px;font-weight:700}
+.header-sub{font-size:11px;opacity:0.85;margin-top:2px}
+.header-btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{border:none;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:5px;transition:all .15s;background:#e8ecf0;color:#1a1a2e}
+.btn:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.15)}
+.btn-light{background:rgba(255,255,255,.16);color:#fff}
+.btn-success{background:#2E7D32;color:#fff}
+.btn-purple{background:#7c3aed;color:#fff}
+.btn-gray{background:#6b7280;color:#fff}
+.btn-red{background:#b94a2c;color:#fff}
+.btn-sm{padding:5px 10px;font-size:11px}
+
+/* ===== STATS ===== */
+.stats{display:flex;flex-wrap:nowrap;align-items:stretch;gap:6px;padding:8px 24px;overflow-x:auto;position:sticky;top:64px;z-index:98;background:white;border-bottom:1px solid #e8ecf0;box-shadow:0 2px 4px rgba(0,0,0,.06)}
+.stat-card{background:white;border-radius:8px;padding:7px 12px;box-shadow:0 1px 4px rgba(0,0,0,.07);border-left:3px solid #ccc;cursor:pointer;flex-shrink:0;min-width:120px;height:64px;display:flex;flex-direction:column;justify-content:center;transition:all .2s}
+.stat-card:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.12)}
+.stat-card.active{box-shadow:0 0 0 2px #2e75b6;transform:translateY(-2px)}
+.stat-card .number{font-size:20px;font-weight:700;line-height:1.1}
+.stat-card .label{font-size:10.5px;color:#666;margin-top:1px;line-height:1.15}
+.sc-reply{border-left-color:#dc2626}.sc-reply .number{color:#dc2626}
+.sc-wait{border-left-color:#ca8a04}.sc-wait .number{color:#854d0e}
+.sc-todo{border-left-color:#ea580c}.sc-todo .number{color:#9a3412}
+.sc-term{border-left-color:#2563eb}.sc-term .number{color:#1d4ed8}
+.sc-task{border-left-color:#7c3aed}.sc-task .number{color:#5b21b6}
+.sc-all{border-left-color:#1f3864}.sc-all .number{color:#1f3864}
+
+/* ===== FILTERS ===== */
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 24px;background:#fafbfc;border-bottom:1px solid #e8ecf0}
+.filters select,.filters input{padding:6px 10px;border:1px solid #cfd6dd;border-radius:7px;font-size:12px;background:#fff}
+.seg{display:inline-flex;border:1px solid #cfd6dd;border-radius:7px;overflow:hidden}
+.seg button{border:none;background:#fff;padding:6px 12px;font-size:12px;cursor:pointer;color:#444}
+.seg button.on{background:#1f3864;color:#fff;font-weight:600}
+
+/* ===== LAYOUT ===== */
+.wrap{padding:16px 24px 60px;max-width:1180px;margin:0 auto}
+.band-title{font-size:15px;font-weight:800;color:#fff;background:linear-gradient(135deg,#1f3864,#2e75b6);border-radius:10px;padding:10px 15px;margin:26px 0 12px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 8px rgba(31,56,100,.18)}
+.band-title:first-child{margin-top:4px}
+.band-title .pill{background:rgba(255,255,255,.22);color:#fff;border-radius:20px;padding:1px 10px;font-size:12px}
+.section-title{font-size:13px;font-weight:700;letter-spacing:.02em;color:#1f3864;margin:22px 0 10px;display:flex;align-items:center;gap:8px}
+.section-title .pill{background:#eef2f7;color:#1f3864;border-radius:20px;padding:1px 9px;font-size:11px}
+.empty{color:#8a93a0;font-size:12.5px;padding:6px 2px}
+
+/* ===== PRIORITY BOX ===== */
+.prio-box{background:linear-gradient(135deg,#fff7ed 0%,#fffbeb 100%);border:1px solid #fed7aa;border-radius:12px;padding:14px 18px;margin-bottom:8px}
+.prio-box h2{font-size:14px;color:#9a3412;margin-bottom:8px;display:flex;align-items:center;gap:7px}
+.prio-box ol{margin-left:20px;font-size:13px;line-height:1.7;color:#7c2d12}
+.prio-box li b{color:#431407}
+
+/* ===== CARDS ===== */
+.card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);padding:9px 13px;margin-bottom:7px;border-left:4px solid #ccc;position:relative}
+.card.cat-reply{border-left-color:#dc2626}
+.card.cat-wait{border-left-color:#ca8a04}
+.card.cat-todo{border-left-color:#ea580c}
+.card.cat-term{border-left-color:#2563eb}
+.card.cat-task{border-left-color:#7c3aed}
+.card.done{opacity:.55}
+.card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
+.card-title{font-size:13.5px;font-weight:700;color:#1a1a2e;line-height:1.3;flex:1;min-width:0}
+.card-acts{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;flex-shrink:0;max-width:64%}
+.card-info{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;margin-top:7px}
+.card-meta{font-size:11px;color:#6b7280;line-height:1.4}
+.card-meta b{color:#374151}
+.badges{display:flex;gap:5px;flex-wrap:wrap}
+.zat-group{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:auto;padding-left:18px}
+.zat-label{font-size:10.5px;color:#9aa6b2;font-weight:600}
+.card-info select,.card-info input{font-size:11px;padding:3px 6px;border:1px solid #d8dee5;border-radius:6px;background:#fff;color:#374151}
+.card-info input{min-width:160px}
+.badge{font-size:10.5px;font-weight:600;border-radius:5px;padding:2px 7px}
+.b-src-mail{background:#e0f2fe;color:#075985}
+.b-src-cal{background:#dbeafe;color:#1e40af}
+.b-src-task{background:#ede9fe;color:#5b21b6}
+.b-src-zak{background:#dcfce7;color:#166534}
+.b-firma{background:#1f3864;color:#fff}
+.b-soukr{background:#64748b;color:#fff}
+.b-term{background:#fee2e2;color:#991b1b}
+.b-term-ok{background:#e0e7ff;color:#3730a3}
+.b-prio1{background:#fee2e2;color:#991b1b}
+.b-prio2{background:#fef3c7;color:#92400e}
+.b-prio3{background:#e0e7ff;color:#3730a3}
+.b-overdue{background:#dc2626;color:#fff}
+.b-uncertain{background:#fff7ed;color:#9a3412;border:1px dashed #fdba74}
+.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:9px;border-top:1px solid #f0f2f5}
+.act{font-size:10.5px;font-weight:600;border:1px solid #d8dee5;background:#fff;color:#374151;border-radius:6px;padding:4px 8px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;transition:all .12s}
+.act:hover{background:#f3f5f7;border-color:#9aa6b2}
+.act.primary{background:#2E7D32;color:#fff;border-color:#2E7D32}
+.act.primary:hover{background:#256628}
+.act.edit-toggle{padding:4px 7px}
+.act.act-del{color:#b91c1c;border-color:#fecaca}
+.act.act-del:hover{background:#fee2e2;border-color:#fca5a5}
+.edit-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:9px;padding-top:9px;border-top:1px dashed #e5e9ee}
+.edit-row::before{content:'Zatřídit:';font-size:10.5px;color:#9aa6b2;font-weight:600}
+.edit-row select,.edit-row input{font-size:11px;padding:4px 7px;border:1px solid #d8dee5;border-radius:6px;background:#fff}
+.edit-row input{flex:1;min-width:150px}
+.note-inline{font-size:11px;color:#9a3412;background:#fff7ed;border:1px dashed #fdba74;border-radius:7px;padding:6px 9px;margin-top:9px}
+
+/* ===== LOGIN ===== */
+#login-screen{position:fixed;inset:0;background:linear-gradient(135deg,#1f3864 0%,#2e75b6 100%);display:flex;align-items:center;justify-content:center;z-index:1000}
+#login-box{background:#fff;border-radius:16px;padding:34px 30px;width:330px;box-shadow:0 20px 60px rgba(0,0,0,.3);text-align:center}
+#login-box h2{font-size:19px;color:#1f3864;margin-bottom:4px}
+#login-box .sub{font-size:12px;color:#777;margin-bottom:18px}
+#login-box select,#login-box input{width:100%;padding:11px;margin-bottom:11px;border:1px solid #cfd6dd;border-radius:9px;font-size:14px}
+#login-box button{width:100%;padding:11px;background:#1f3864;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer}
+#login-box button:hover{background:#16294a}
+#login-error{display:none;color:#dc2626;font-size:12px;margin-top:8px}
+.logo-circle{width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#1f3864,#2e75b6);color:#fff;font-weight:800;font-size:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
+
+/* ===== MODAL ===== */
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:900;align-items:center;justify-content:center;padding:16px}
+.modal.open{display:flex}
+.modal-box{background:#fff;border-radius:14px;width:520px;max-width:100%;max-height:88vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal-head{padding:15px 20px;border-bottom:1px solid #eef0f3;font-size:15px;font-weight:700;color:#1f3864}
+.modal-body{padding:18px 20px;font-size:13px}
+.modal-body label{display:block;font-size:12px;font-weight:600;color:#555;margin:10px 0 4px}
+.modal-body input,.modal-body textarea,.modal-body select{width:100%;padding:9px;border:1px solid #cfd6dd;border-radius:8px;font-size:13px;font-family:inherit}
+.modal-body textarea{min-height:120px;resize:vertical}
+.modal-foot{padding:13px 20px;border-top:1px solid #eef0f3;display:flex;justify-content:flex-end;gap:8px}
+
+/* ===== TOAST ===== */
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(120px);background:#1a1a2e;color:#fff;padding:11px 20px;border-radius:10px;font-size:13px;z-index:1100;transition:transform .3s;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+#toast.show{transform:translateX(-50%) translateY(0)}
+#toast.ok{background:#2E7D32}
+#toast.err{background:#b94a2c}
+
+body:not(.prihlasen) #main-obsah{display:none}
+@media(max-width:640px){.wrap{padding:12px 12px 50px}.header{padding:12px 14px}.stats,.filters{padding-left:14px;padding-right:14px}}
+</style>
+</head>
+<body>
+
+<!-- ===================== LOGIN ===================== -->
+<div id="login-screen">
+  <div id="login-box">
+    <div class="logo-circle">OB</div>
+    <h2>Přehled pošty 2026</h2>
+    <div class="sub">OPUS BUILD s.r.o. – přihlaste se prosím</div>
+    <select id="login-role">
+      <option value="">– vyberte roli –</option>
+      <option value="spravce">Správce</option>
+      <option value="priprava">Příprava</option>
+      <option value="technik">Technik</option>
+    </select>
+    <input type="password" id="login-heslo" placeholder="Heslo" onkeydown="if(event.key==='Enter')prihlasit()">
+    <button id="login-btn" onclick="prihlasit()">🔐 Přihlásit se</button>
+    <div id="login-error">Nesprávná role nebo heslo. Zkuste to znovu.</div>
+  </div>
+</div>
+
+<!-- ===================== HLAVNÍ OBSAH ===================== -->
+<div id="main-obsah">
+  <div class="header">
+    <div>
+      <h1>📨 Přehled pošty 2026</h1>
+      <div class="header-sub" id="stav-radek">⏳ Připojuji se ke cloudu…</div>
+    </div>
+    <div class="header-btns">
+      <button class="btn btn-success" onclick="oteviNovyUkol()">➕ Úkol</button>
+      <button class="btn" style="background:#2563eb;color:#fff" onclick="oteviNovaUdalost()">📅 Událost</button>
+      <button class="btn" style="background:#0891b2;color:#fff" onclick="oteviNovyEmail()">✉️ E-mail</button>
+      <button class="btn btn-light" onclick="aktualizovat()">🔄 Aktualizovat</button>
+      <button class="btn btn-purple" id="btn-souhrn" onclick="odeslatSouhrn(true)" style="display:none">📧 Poslat souhrn</button>
+      <a class="btn btn-light" href="https://opusbuild.github.io/evidence-zakazek/" target="_blank">📋 Evidence zakázek</a>
+      <span id="user-badge" style="font-size:11px;opacity:.9"></span>
+      <button class="btn btn-red" onclick="odhlasit()">Odhlásit</button>
+    </div>
+  </div>
+
+  <!-- STATISTIKY / FILTR PODLE KATEGORIE -->
+  <div class="stats" id="stats"></div>
+
+  <!-- FILTRY -->
+  <div class="filters">
+    <div class="seg" id="seg-scope">
+      <button class="on" data-scope="" onclick="setScope('')">Vše</button>
+      <button data-scope="firemní" onclick="setScope('firemní')">🏢 Firemní</button>
+      <button data-scope="soukromé" onclick="setScope('soukromé')">🏠 Soukromé</button>
+    </div>
+    <select id="filter-zakazka" onchange="render()"><option value="">Všechny zakázky / štítky</option></select>
+    <select id="filter-stav" onchange="render()">
+      <option value="otevrene">Otevřené (výchozí)</option>
+      <option value="vse">Vše včetně hotových</option>
+      <option value="hotovo">Jen hotové</option>
+      <option value="odlozeno">Jen odložené</option>
+      <option value="skryte">Jen odstraněné / skryté</option>
+    </select>
+    <input id="filter-search" placeholder="🔎 Hledat…" oninput="render()" style="min-width:160px">
+    <button class="btn btn-gray btn-sm" onclick="zrusitFiltry()">✕ Zrušit filtry</button>
+  </div>
+
+  <div class="wrap">
+    <!-- DNEŠNÍ PRIORITY -->
+    <div class="prio-box" id="prio-box">
+      <h2>🎯 Dnešní priority</h2>
+      <ol id="prio-list"></ol>
+    </div>
+    <!-- SEKCE -->
+    <div id="sekce"></div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: ODLOŽIT ===================== -->
+<div class="modal" id="modal-odlozit">
+  <div class="modal-box">
+    <div class="modal-head">⏰ Připomenout později</div>
+    <div class="modal-body">
+      <div>Položka se schová z přehledu a vrátí se v zadaný den.</div>
+      <label>Připomenout od</label>
+      <input type="date" id="odlozit-datum">
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-gray" onclick="zavri('modal-odlozit')">Zrušit</button>
+      <button class="btn btn-success" onclick="potvrdOdlozit()">Odložit</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: ODPOVĚĎ ===================== -->
+<div class="modal" id="modal-odpoved">
+  <div class="modal-box">
+    <div class="modal-head">✍️ Návrh odpovědi (koncept)</div>
+    <div class="modal-body">
+      <div class="note-inline">Toto je <b>jen návrh</b>. Nic se neodešle. Text se uloží k položce a Gmail koncept ve vlákně připraví skript při dalším běhu – nebo si rovnou otevři Gmail a odešli ručně.</div>
+      <label>Komu</label>
+      <input id="odp-komu" readonly>
+      <label>Předmět</label>
+      <input id="odp-predmet">
+      <label>Text odpovědi</label>
+      <textarea id="odp-text" placeholder="Napiš návrh odpovědi…"></textarea>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-gray" onclick="zavri('modal-odpoved')">Zrušit</button>
+      <button class="btn btn-light" style="background:#1f3864;color:#fff" onclick="otevritGmail()">✉️ Otevřít v Gmailu</button>
+      <button class="btn btn-success" onclick="ulozitNavrhOdpovedi()">💾 Uložit návrh</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: NOVÝ ÚKOL ===================== -->
+<div class="modal" id="modal-novy-ukol">
+  <div class="modal-box">
+    <div class="modal-head">➕ Nový úkol</div>
+    <div class="modal-body">
+      <label>Název úkolu</label>
+      <input id="nu-titulek" placeholder="Co je potřeba udělat">
+      <label>Termín (nepovinné)</label>
+      <input type="date" id="nu-termin">
+      <label>Zařazení</label>
+      <select id="nu-scope"><option value="firemní">🏢 firemní</option><option value="soukromé">🏠 soukromé</option></select>
+      <label>Zakázka / štítek (našeptává)</label>
+      <input id="nu-zakazka" list="zakazky-list" placeholder="začni psát…">
+      <label>Priorita</label>
+      <select id="nu-priorita"><option value="">— priorita —</option><option value="vysoká">⭐ Vysoká</option><option value="střední">⭐ Střední</option><option value="nízká">⭐ Nízká</option></select>
+      <div class="note-inline">Úkol se uloží do přehledu. Do Google Tasks ho přidá skript při dalším běhu. Nic se neodešle.</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-gray" onclick="zavri('modal-novy-ukol')">Zrušit</button>
+      <button class="btn btn-success" onclick="ulozNovyUkol()">➕ Vytvořit úkol</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: NOVÁ UDÁLOST ===================== -->
+<div class="modal" id="modal-nova-udalost">
+  <div class="modal-box">
+    <div class="modal-head">📅 Nová událost / schůzka</div>
+    <div class="modal-body">
+      <label>Název</label>
+      <input id="ud-titulek" placeholder="Název události">
+      <label>Datum</label>
+      <input type="date" id="ud-datum">
+      <label>Poznámka (nepovinné)</label>
+      <textarea id="ud-popis" style="min-height:70px"></textarea>
+      <div class="note-inline">Otevře se předvyplněná Google událost — uložíš ji v kalendáři. Nic se nezakládá samo.</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-gray" onclick="zavri('modal-nova-udalost')">Zrušit</button>
+      <button class="btn" style="background:#2563eb;color:#fff" onclick="otevritUdalost()">📅 Otevřít v kalendáři</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: NOVÝ E-MAIL ===================== -->
+<div class="modal" id="modal-novy-email">
+  <div class="modal-box">
+    <div class="modal-head">✉️ Nový e-mail</div>
+    <div class="modal-body">
+      <label>Komu</label>
+      <input id="ne-komu" placeholder="adresa@firma.cz">
+      <label>Předmět</label>
+      <input id="ne-predmet">
+      <label>Text</label>
+      <textarea id="ne-text"></textarea>
+      <div class="note-inline">Otevře se předvyplněné okno v Gmailu — odešleš ho ručně. Nic se neodešle samo.</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-gray" onclick="zavri('modal-novy-email')">Zrušit</button>
+      <button class="btn" style="background:#0891b2;color:#fff" onclick="otevritNovyEmail()">✉️ Otevřít v Gmailu</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: POTVRDIT ODSTRANĚNÍ ===================== -->
+<div class="modal" id="modal-odstranit">
+  <div class="modal-box">
+    <div class="modal-head">🗑 Odstranit z přehledu?</div>
+    <div class="modal-body">
+      <div id="odstranit-text">Opravdu chceš tuto položku odstranit z přehledu?</div>
+      <div class="note-inline" id="odstranit-note">Z Gmailu (ani odjinud) se nic nemaže — položka jen zmizí z přehledu. Kdykoli ji najdeš ve filtru „Jen odstraněné / skryté" a tlačítkem Obnovit vrátíš zpět.</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-gray" onclick="zavri('modal-odstranit')">Zrušit</button>
+      <button class="btn btn-red" id="odstranit-btn" onclick="potvrdOdstranit()">🗑 Ano, odstranit z přehledu</button>
+    </div>
+  </div>
+</div>
+
+<datalist id="zakazky-list"></datalist>
+<datalist id="stitky-list"></datalist>
+<div id="toast"></div>
+
+<script>
+/* =========================================================
+   PŘEHLED POŠTY — FÁZE 4 (front-end)
+   Sourozenec Evidence zakázek. Stejný Firebase projekt opus-build.
+   Čte kolekci "prehled" (plní ji Apps Script z fází 1–3) + zakázky.
+   Nic neodesílá ani nezakládá samo — vše je návrh ke schválení.
+   ========================================================= */
+const APP_VERSION = 'v0.1';
+
+// ---- Firebase (stejný projekt jako Evidence zakázek) ----
+const firebaseConfig = {
+  apiKey: "AIzaSyDEpLS2ngdh8jY7SBWOKjgSHIJy6tTAxb4",
+  authDomain: "opus-build.firebaseapp.com",
+  projectId: "opus-build",
+  storageBucket: "opus-build.firebasestorage.app",
+  messagingSenderId: "829335882041",
+  appId: "1:829335882041:web:1f59227e9d7ec7723240e8"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION);
+
+// ---- EmailJS (stejná šablona jako sesterská appka) ----
+const EMAILJS_SERVICE_ID = 'opus-build';
+const EMAILJS_TEMPLATE_ID = 'template_z43ryjs';
+const EMAILJS_PUBLIC_KEY = '4K5-_8XXWC5JniumT';
+emailjs.init(EMAILJS_PUBLIC_KEY);
+
+// ---- Role ----
+const EMAIL_ROLE_MAP = {
+  'vitasek@opusbuild.cz':  { role:'spravce',  label:'👤 Správce' },
+  'priprava@opusbuild.cz': { role:'priprava', label:'📋 Příprava' },
+  'vitaskova.nina@gmail.com': { role:'technik', label:'🔧 Technik' },
+  'zakazkylisen@gmail.com':   { role:'technik', label:'🔧 Technik' }
+};
+let aktualniRole = null;
+
+// ---- Stav appky ----
+let prehledData = {};     // id -> dokument z kolekce "prehled"
+let zakazkyData = {};     // zakazky/data
+let aktivniScope = '';
+let aktivniKategorie = ''; // filtr ze stat karet (kategorie) – zachováno pro kompatibilitu
+let aktivniZdroj = '';     // filtr ze stat karet (zdroj/pásmo)
+let aktualniOdpoved = null; // id položky, ke které píšu odpověď
+
+// Kategorie: klíč -> {label, css, badge}
+const KAT = {
+  'k odpovědi': {label:'Na co musím odpovědět', css:'reply', scls:'sc-reply'},
+  'čekám':      {label:'Na co čekám odpověď',   css:'wait',  scls:'sc-wait'},
+  'dořešit':    {label:'Co musím dořešit',       css:'todo',  scls:'sc-todo'},
+  'termín':     {label:'Termíny',                css:'term',  scls:'sc-term'},
+  'úkol':       {label:'Úkoly',                  css:'task',  scls:'sc-task'}
+};
+const KAT_PORADI = ['k odpovědi','dořešit','termín','čekám','úkol'];
+const UZAVRENE_ZAK = ['Dokončeno','Vyfakturováno','Storno','Stornováno'];
+
+/* ===================== PŘIHLÁŠENÍ ===================== */
+function prihlasit(){
+  const heslo = document.getElementById('login-heslo').value;
+  const role = document.getElementById('login-role').value;
+  const err = document.getElementById('login-error');
+  if(!role || !heslo){ err.textContent='Vyberte roli a zadejte heslo.'; err.style.display='block'; return; }
+  const emaily = Object.keys(EMAIL_ROLE_MAP).filter(e=>EMAIL_ROLE_MAP[e].role===role);
+  err.style.display='none';
+  document.getElementById('login-btn').textContent='⏳ Přihlašuji…';
+  document.getElementById('login-btn').disabled=true;
+  zkusEmail(emaily, heslo, 0);
+}
+function zkusEmail(emaily, heslo, i){
+  if(i>=emaily.length){ chybaLoginu('Nesprávné heslo nebo e-mail.'); return; }
+  firebase.auth().signInWithEmailAndPassword(emaily[i], heslo)
+    .then(()=>{}) // řeší onAuthStateChanged
+    .catch(()=>{ (i+1<emaily.length) ? zkusEmail(emaily,heslo,i+1) : chybaLoginu('Nesprávné heslo. Zkuste to znovu.'); });
+}
+function chybaLoginu(t){
+  const err=document.getElementById('login-error');
+  err.textContent=t; err.style.display='block';
+  document.getElementById('login-btn').textContent='🔐 Přihlásit se';
+  document.getElementById('login-btn').disabled=false;
+  document.getElementById('login-heslo').value='';
+}
+function odhlasit(){ firebase.auth().signOut().then(()=>{ aktualniRole=null; document.body.classList.remove('prihlasen'); document.getElementById('login-screen').style.display='flex'; }); }
+
+firebase.auth().onAuthStateChanged(user=>{
+  clearTimeout(window._authTimeout);
+  if(user){
+    const email=user.email.toLowerCase(), info=EMAIL_ROLE_MAP[email];
+    if(!info){ firebase.auth().signOut(); chybaLoginu('Tento účet nemá přístup do aplikace.'); document.getElementById('login-screen').style.display='flex'; return; }
+    aktualniRole=info.role;
+    document.getElementById('login-screen').style.display='none';
+    document.body.classList.add('prihlasen');
+    document.getElementById('user-badge').textContent=info.label;
+    document.getElementById('login-btn').textContent='🔐 Přihlásit se';
+    document.getElementById('login-btn').disabled=false;
+    if(info.role==='spravce'||info.role==='priprava') document.getElementById('btn-souhrn').style.display='inline-flex';
+    setTimeout(nactiData, 400);
+  } else {
+    aktualniRole=null;
+    document.body.classList.remove('prihlasen');
+    document.getElementById('login-screen').style.display='flex';
+  }
+});
+window._authTimeout=setTimeout(()=>{ if(!aktualniRole){ document.body.classList.remove('prihlasen'); document.getElementById('login-screen').style.display='flex'; } }, 5000);
+
+/* ===================== NAČTENÍ DAT ===================== */
+function nactiData(){
+  if(!firebase.auth().currentUser) return;
+  document.getElementById('stav-radek').textContent='⏳ Načítám data…';
+  // 1) zakázky (živě)
+  if(!window._zakSnap){
+    window._zakSnap=true;
+    db.collection('zakazky').doc('data').onSnapshot(doc=>{
+      zakazkyData = (doc.exists ? doc.data() : {}) || {};
+      render();
+    }, e=>console.warn('zakazky snapshot:', e.message));
+  }
+  // 2) přehled (živě)
+  if(!window._prehSnap){
+    window._prehSnap=true;
+    db.collection('prehled').onSnapshot(snap=>{
+      prehledData={};
+      snap.forEach(d=> prehledData[d.id]={ id:d.id, ...d.data() });
+      document.getElementById('stav-radek').textContent='☁️ Synchronizováno: '+ new Date().toLocaleTimeString('cs-CZ') +' · '+APP_VERSION;
+      render();
+      naplanujRanniMail();
+    }, e=>{
+      console.warn('prehled snapshot:', e.message);
+      document.getElementById('stav-radek').textContent='⚠️ Kolekci „prehled" se nepodařilo načíst – viz poznámka při nasazení.';
+    });
+  }
+}
+function aktualizovat(){
+  showToast('🔄 Načítám aktuální stav z databáze…');
+  // onSnapshot drží data živě; tlačítko jen vynutí překreslení a připomene, že
+  // NOVOU poštu z Gmailu natahuje až Apps Script (ten se spouští zvlášť).
+  render();
+  setTimeout(()=>showToast('Hotovo. Pozn.: nové e-maily přidá až běh skriptu (zatím ručně).', true), 600);
+}
+
+/* ===================== ODVOZENÍ POLOŽEK ZE ZAKÁZEK ===================== */
+function zakPolozky(){
+  const out=[];
+  const zdroje=[...(zakazkyData.pozadavky||[])];
+  const dnes=new Date(); dnes.setHours(0,0,0,0);
+  zdroje.forEach(z=>{
+    const stav=(z.stav||'').trim();
+    if(UZAVRENE_ZAK.includes(stav)) return; // uzavřené po termínu už neotravují
+    const poTermínu = z.termin && (new Date(z.termin) < dnes);
+    let kategorie=null, titulek=null;
+    if(stav==='Nacenit'){ kategorie='úkol'; titulek='Připravit nacenění'; }
+    else if(stav==='Prohlídka'){ kategorie='úkol'; titulek='Provést prohlídku'; }
+    else if(poTermínu){ kategorie='termín'; titulek='Zakázka po termínu'; }
+    else return; // ostatní stavy se do přehledu netahají
+    const nazev=[z.adresa,z.popis].filter(Boolean).join(' — ') || ('Zakázka '+(z.id||''));
+    out.push({
+      id:'zak_'+(z.id||nazev).toString().replace(/[^A-Za-z0-9_-]/g,'_'),
+      zdroj:'zakázka', kategorie, titulek:titulek+': '+nazev,
+      protistrana:z.technik||'', scope:'firemní', zakazka:(z.adresa||nazev),
+      stitek:'', priorita: poTermínu?'vysoká':(z.priorita||''),
+      termin:z.termin||'', odkaz:'https://opusbuild.github.io/evidence-zakazek/',
+      stav:'otevřeno', poprve_videno:'', vyrizeno:'', _zak:true, _stavZak:stav
+    });
+  });
+  return out;
+}
+
+// Spojí přehled + odvozené zakázky; ruční override (zak_ doc v "prehled") má přednost ve "stav"
+function vsechnyPolozky(){
+  const map={};
+  Object.values(prehledData).forEach(p=> map[p.id]={...p});
+  zakPolozky().forEach(z=>{
+    if(map[z.id]) map[z.id]={...z, ...map[z.id], _zak:true, titulek:z.titulek, termin:z.termin, zakazka:z.zakazka};
+    else map[z.id]=z;
+  });
+  return Object.values(map);
+}
+
+/* ===================== POMOCNÉ ===================== */
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function prioVaha(p){ return p==='vysoká'?1 : p==='střední'?2 : p==='nízká'?3 : 9; }
+function dnesISO(){ return new Date().toISOString().split('T')[0]; }
+function jeCerstve(p){ // < 24 h od poprve_videno → Gmail nemusel zaindexovat odpověď
+  if(!p.poprve_videno) return false;
+  const t=new Date(p.poprve_videno); return (Date.now()-t.getTime()) < 24*3600*1000;
+}
+function emailZProtistrany(s){ const m=(s||'').match(/[\w.+-]+@[\w.-]+\.\w+/); return m?m[0]:''; }
+function termTxt(t){
+  if(!t) return '';
+  const d=new Date(t), dnes=new Date(); dnes.setHours(0,0,0,0);
+  const diff=Math.round((d-dnes)/(24*3600*1000));
+  const s=d.toLocaleDateString('cs-CZ',{day:'numeric',month:'numeric',year:'numeric'});
+  if(diff<0) return {txt:'⚠️ po termínu ('+s+')', cls:'b-overdue'};
+  if(diff===0) return {txt:'⏰ dnes ('+s+')', cls:'b-term'};
+  if(diff<=3) return {txt:'⏰ za '+diff+' dny ('+s+')', cls:'b-term'};
+  return {txt:'📅 '+s, cls:'b-term-ok'};
+}
+
+/* ===================== FILTRY ===================== */
+function setScope(s){
+  aktivniScope=s;
+  document.querySelectorAll('#seg-scope button').forEach(b=> b.classList.toggle('on', b.dataset.scope===s));
+  render();
+}
+function zrusitFiltry(){
+  aktivniScope=''; aktivniKategorie=''; aktivniZdroj='';
+  document.getElementById('filter-zakazka').value='';
+  document.getElementById('filter-stav').value='otevrene';
+  document.getElementById('filter-search').value='';
+  setScope('');
+}
+function projdeFiltr(p){
+  const stavF=document.getElementById('filter-stav').value;
+  const stav=p.stav||'otevřeno';
+  if(stavF==='otevrene'){
+    if(stav==='hotovo'||stav==='skryto') return false;
+    if(stav==='odloženo'){ const od=p.pripomenout_od; if(od && new Date(od)>new Date()) return false; }
+  } else if(stavF==='hotovo' && stav!=='hotovo') return false;
+  else if(stavF==='odlozeno' && stav!=='odloženo') return false;
+  else if(stavF==='skryte' && stav!=='skryto') return false;
+  else if(stavF==='vse' && false) return false; // vše: bez omezení stavu
+
+  if(aktivniScope && (p.scope||'')!==aktivniScope) return false;
+  if(aktivniZdroj && (p.zdroj||'')!==aktivniZdroj) return false;
+  if(aktivniKategorie && (p.kategorie||'')!==aktivniKategorie) return false;
+
+  const zf=document.getElementById('filter-zakazka').value;
+  if(zf && (p.zakazka||p.stitek||'')!==zf) return false;
+
+  const q=document.getElementById('filter-search').value.toLowerCase().trim();
+  if(q){ const text=[p.titulek,p.protistrana,p.zakazka,p.stitek,p.kategorie].join(' ').toLowerCase(); if(!text.includes(q)) return false; }
+  return true;
+}
+
+/* ===================== RENDER ===================== */
+function render(){
+  const vse=vsechnyPolozky();
+  renderStats(vse);
+  renderZakazkaFilter(vse);
+  naplnDatalist(vse);
+  renderPriority(vse);
+
+  const viditelne=vse.filter(projdeFiltr);
+  const sekce=document.getElementById('sekce');
+  let html='';
+
+  // řazení v rámci sekce: termín dřív, pak priorita
+  const tridit = arr => arr.sort((a,b)=>{
+    const ta=a.termin?new Date(a.termin).getTime():Infinity, tb=b.termin?new Date(b.termin).getTime():Infinity;
+    if(ta!==tb) return ta-tb;
+    return prioVaha(a.priorita)-prioVaha(b.priorita);
+  });
+  const band  = (lbl,n)=> `<div class="band-title">${lbl} <span class="pill">${n}</span></div>`;
+  const subt  = (lbl,n)=> `<div class="section-title">${esc(lbl)} <span class="pill">${n}</span></div>`;
+  const vykresli = arr => arr.map(karta).join('');
+
+  // ===== PÁSMO 1: POŠTA (e-maily) — nahoře, to je smysl projektu =====
+  const mail = viditelne.filter(p=>p.zdroj==='e-mail');
+  if(mail.length){
+    html += band('📨 Pošta', mail.length);
+    [['k odpovědi','Na co musím odpovědět'],['dořešit','Co musím dořešit'],['čekám','Na co čekám odpověď']]
+      .forEach(([k,lbl])=>{ const it=tridit(mail.filter(p=>(p.kategorie||'')===k)); if(it.length){ html+=subt(lbl,it.length)+vykresli(it); } });
+    const nez=tridit(mail.filter(p=>!['k odpovědi','dořešit','čekám'].includes(p.kategorie||'')));
+    if(nez.length) html += subt('Nezatříděná pošta (čeká na chytré třídění – fáze 5)', nez.length) + vykresli(nez);
+  }
+
+  // ===== PÁSMO 2: KALENDÁŘ =====
+  const cal = tridit(viditelne.filter(p=>p.zdroj==='kalendář'));
+  if(cal.length) html += band('📅 Kalendář', cal.length) + vykresli(cal);
+
+  // ===== PÁSMO 3: ÚKOLY (Google Tasks) =====
+  const task = tridit(viditelne.filter(p=>p.zdroj==='úkol'));
+  if(task.length) html += band('✅ Úkoly', task.length) + vykresli(task);
+
+  // ===== PÁSMO 4: TERMÍNY A ZAKÁZKY (z Evidence zakázek) — až na konci =====
+  const zak = tridit(viditelne.filter(p=>p.zdroj==='zakázka'));
+  if(zak.length) html += band('🏗️ Termíny a zakázky', zak.length) + vykresli(zak);
+
+  // cokoliv s neznámým zdrojem
+  const ost = tridit(viditelne.filter(p=>!['e-mail','zakázka','kalendář','úkol'].includes(p.zdroj)));
+  if(ost.length) html += band('Ostatní', ost.length) + vykresli(ost);
+
+  sekce.innerHTML = html || '<div class="empty">Žádné položky neodpovídají filtru. 🎉</div>';
+}
+
+function renderStats(vse){
+  const otevrene=vse.filter(p=>(p.stav||'otevřeno')!=='hotovo');
+  const pocet=z=> otevrene.filter(p=>(p.zdroj||'')===z).length;
+  const def=[
+    {z:'e-mail', scls:'sc-reply', lbl:'📨 Pošta'},
+    {z:'kalendář',scls:'sc-task', lbl:'📅 Kalendář'},
+    {z:'úkol',   scls:'sc-todo',  lbl:'✅ Úkoly (Google Tasks)'},
+    {z:'zakázka',scls:'sc-term',  lbl:'🏗️ Termíny a zakázky'}
+  ];
+  let html=`<div class="stat-card sc-all ${aktivniZdroj===''?'active':''}" onclick="filtrZdroj('')">
+      <div class="number">${otevrene.length}</div><div class="label">Vše otevřené</div></div>`;
+  def.forEach(d=>{
+    html+=`<div class="stat-card ${d.scls} ${aktivniZdroj===d.z?'active':''}" onclick="filtrZdroj('${d.z}')">
+      <div class="number">${pocet(d.z)}</div><div class="label">${d.lbl}</div></div>`;
+  });
+  document.getElementById('stats').innerHTML=html;
+}
+function filtrZdroj(z){ aktivniZdroj = (aktivniZdroj===z?'':z); render(); }
+
+function renderZakazkaFilter(vse){
+  const sel=document.getElementById('filter-zakazka'); const cur=sel.value;
+  const set=new Set();
+  vse.forEach(p=>{ const v=p.zakazka||p.stitek; if(v) set.add(v); });
+  const opts=['<option value="">Všechny zakázky / štítky</option>']
+    .concat([...set].sort((a,b)=>a.localeCompare(b,'cs')).map(v=>`<option value="${esc(v)}">${esc(v)}</option>`));
+  sel.innerHTML=opts.join(''); sel.value=cur;
+}
+
+// Našeptávač: nabídne všechny dosud zadané zakázky (i z Evidence zakázek) a štítky
+function naplnDatalist(vse){
+  const zak=new Set(), stit=new Set();
+  // zakázky z Evidence zakázek (adresa = název zakázky)
+  ['pozadavky','vyfakturovane','stornovane'].forEach(klic=>{
+    (zakazkyData[klic]||[]).forEach(z=>{ if(z && z.adresa) zak.add(String(z.adresa).trim()); });
+  });
+  // už použité hodnoty z přehledu
+  vse.forEach(p=>{ if(p.zakazka) zak.add(p.zakazka); if(p.stitek) stit.add(p.stitek); });
+  const opt = v => `<option value="${esc(v)}">`;
+  document.getElementById('zakazky-list').innerHTML=[...zak].sort((a,b)=>a.localeCompare(b,'cs')).map(opt).join('');
+  document.getElementById('stitky-list').innerHTML=[...stit].sort((a,b)=>a.localeCompare(b,'cs')).map(opt).join('');
+}
+
+function renderPriority(vse){
+  const otevrene=vse.filter(p=>(p.stav||'otevřeno')!=='hotovo' && !(p.stav==='odloženo' && p.pripomenout_od && new Date(p.pripomenout_od)>new Date()));
+  const skore=p=>{
+    let s=0;
+    if(p.kategorie==='k odpovědi') s+=40;
+    if(p.kategorie==='dořešit') s+=25;
+    if(p.termin){ const diff=(new Date(p.termin)-new Date())/(24*3600*1000); if(diff<0)s+=60; else if(diff<=1)s+=45; else if(diff<=3)s+=30; else if(diff<=7)s+=12; }
+    s+= (4-prioVaha(p.priorita))*8;
+    return s;
+  };
+  const top=otevrene.map(p=>({p,s:skore(p)})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s).slice(0,5);
+  const ol=document.getElementById('prio-list');
+  if(!top.length){ document.getElementById('prio-box').style.display='none'; return; }
+  document.getElementById('prio-box').style.display='block';
+  ol.innerHTML=top.map(x=>{
+    const p=x.p; const t=p.termin?termTxt(p.termin):null;
+    const kde=p.zakazka||p.stitek||'';
+    return `<li><b>${esc(p.titulek||'(bez názvu)')}</b>${kde?' — '+esc(kde):''}${t?' · '+esc(t.txt):''}</li>`;
+  }).join('');
+}
+
+/* ===================== KARTA ===================== */
+let editujici = new Set();
+function toggleEdit(id){ editujici.has(id) ? editujici.delete(id) : editujici.add(id); render(); }
+
+function karta(p){
+  const info=KAT[p.kategorie||''] || {css:'',label:''};
+  const stav=p.stav||'otevřeno';
+  const done = stav==='hotovo';
+  const skryto = stav==='skryto';
+  const zavreno = done || skryto;
+  const srcBadge={ 'e-mail':'b-src-mail','kalendář':'b-src-cal','úkol':'b-src-task','zakázka':'b-src-zak' }[p.zdroj]||'b-src-mail';
+  const srcTxt={ 'e-mail':'✉️ e-mail','kalendář':'📅 kalendář','úkol':'✅ úkol','zakázka':'🏗️ zakázka' }[p.zdroj]||('✉️ '+(p.zdroj||''));
+  let badges=`<span class="badge ${srcBadge}">${srcTxt}</span>`;
+  badges+= (p.scope==='soukromé') ? '<span class="badge b-soukr">🏠 soukromé</span>' : '<span class="badge b-firma">🏢 firemní</span>';
+  if(p.termin){ const t=termTxt(p.termin); badges+=`<span class="badge ${t.cls}">${esc(t.txt)}</span>`; }
+  if(p.priorita){ const c={'vysoká':'b-prio1','střední':'b-prio2','nízká':'b-prio3'}[p.priorita]||'b-prio3'; badges+=`<span class="badge ${c}">⭐ ${esc(p.priorita)}</span>`; }
+  if(p.zakazka) badges+=`<span class="badge" style="background:#eef2f7;color:#1f3864">${esc(p.zakazka)}</span>`;
+  if(p.stitek) badges+=`<span class="badge" style="background:#f1f5f9;color:#475569">#${esc(p.stitek)}</span>`;
+
+  // jistota vs. odhad
+  if(p.kategorie==='k odpovědi'){
+    badges += jeCerstve(p)
+      ? '<span class="badge b-uncertain">⏳ možná čerstvě odpovězeno – ověř</span>'
+      : '<span class="badge b-uncertain">❓ vypadá bez odpovědi – ověř</span>';
+  } else if(p.kategorie==='čekám'){
+    badges += '<span class="badge b-uncertain">⏳ čekám na odpověď (odhad)</span>';
+  }
+
+  const meta=[];
+  if(p.protistrana) meta.push(`<b>${p.kategorie==='k odpovědi'||p.zdroj==='e-mail'?'Od':'Kdo'}:</b> ${esc(p.protistrana)}`);
+  if(p.vyrizeno) meta.push(`<b>Vyřízeno:</b> ${esc(p.vyrizeno)}`);
+  if(skryto) meta.push(`🗑 odstraněno z přehledu`);
+  if(stav==='odloženo'&&p.pripomenout_od) meta.push(`<b>Připomenout od:</b> ${esc(p.pripomenout_od)}`);
+  if(p.navrh_odpovedi) meta.push(`📝 uložen návrh odpovědi`);
+
+  // akce
+  let akce='';
+  if(zavreno){
+    akce=`<button class="act" onclick="znovuOtevrit('${p.id}')">↩︎ ${skryto?'Obnovit':'Znovu otevřít'}</button>`;
+  } else {
+    akce+=`<button class="act primary" onclick="hotovo('${p.id}')">✓ Hotovo</button>`;
+    akce+=`<button class="act" onclick="oteviOdlozit('${p.id}')">⏰ Připomenout</button>`;
+    if(p.zdroj==='e-mail') akce+=`<button class="act" onclick="oteviOdpoved('${p.id}')">✍️ Odpovědět</button>`;
+    akce+=`<button class="act" onclick="doKalendare('${p.id}')">📅 Do kalendáře</button>`;
+    if(p.zdroj!=='úkol') akce+=`<button class="act" onclick="vytvoritUkol('${p.id}')">➕ Úkol</button>`;
+    if(p.odkaz) akce+=`<button class="act" onclick="window.open('${esc(p.odkaz)}','_blank')">🔗 Zdroj</button>`;
+    if(p.zdroj==='e-mail') akce+=`<button class="act act-del" onclick="odstranit('${p.id}')" title="Přesunout e-mail do koše v Gmailu + odebrat z přehledu">🗑 Do koše</button>`;
+    else akce+=`<button class="act act-del" onclick="odstranit('${p.id}')" title="Skrýt z přehledu (nevrátí se ani po běhu skriptu)">🗑 Odstranit</button>`;
+  }
+
+  // zatřiďovací ovládání — na stejném řádku jako odznaky a „Od:" (našeptávač u zakázky)
+  const sel=(opts,val,oc)=> `<select onchange="${oc}('${p.id}',this.value)">`+opts.map(o=>`<option value="${o[0]}" ${val===o[0]?'selected':''}>${o[1]}</option>`).join('')+`</select>`;
+  const soukr=(p.scope==='soukromé');
+  const zakInput=`<input list="${soukr?'stitky-list':'zakazky-list'}" placeholder="${soukr?'štítek (auto, dům…)':'zakázka – stačí psát, našeptá'}" value="${esc(soukr?(p.stitek||''):(p.zakazka||''))}" onchange="nastav_zakazka('${p.id}',this.value)">`;
+  const editControls=
+    sel([['','— scope —'],['firemní','🏢 firemní'],['soukromé','🏠 soukromé']], p.scope||'', 'nastav_scope')
+    + sel([['','— kategorie —'],['k odpovědi','K odpovědi'],['čekám','Čekám'],['dořešit','Dořešit'],['termín','Termín'],['úkol','Úkol']], p.kategorie||'', 'nastav_kat')
+    + sel([['','— priorita —'],['vysoká','⭐ Vysoká'],['střední','⭐ Střední'],['nízká','⭐ Nízká']], p.priorita||'', 'nastav_prio')
+    + zakInput;
+
+  return `<div class="card cat-${info.css} ${zavreno?'done':''}">
+    <div class="card-head">
+      <div class="card-title">${esc(p.titulek||'(bez názvu)')}</div>
+      <div class="card-acts">${akce}</div>
+    </div>
+    <div class="card-info">
+      <div class="badges">${badges}</div>
+      ${meta.length?`<span class="card-meta">${meta.join(' &nbsp;·&nbsp; ')}</span>`:''}
+      <div class="zat-group">
+        <span class="zat-label">Zatřídit:</span>
+        ${editControls}
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ===================== ZÁPIS DO FIRESTORE (jen "prehled") ===================== */
+function ulozPole(id, patch){
+  // zak_ položky odvozené ze zakázek: vytvoříme/aktualizujeme malý override dokument
+  const base = prehledData[id] ? {} : (id.startsWith('zak_') ? minimalniZak(id) : {});
+  return db.collection('prehled').doc(id).set({ ...base, ...patch }, {merge:true})
+    .then(()=>{ if(prehledData[id]) prehledData[id]={...prehledData[id],...patch}; })
+    .catch(e=>{ console.error(e); showToast('⚠️ Zápis se nezdařil (oprávnění?). Viz poznámka k nasazení.', false, true); });
+}
+function minimalniZak(id){
+  const z=zakPolozky().find(x=>x.id===id)||{};
+  return { id, zdroj:z.zdroj||'zakázka', kategorie:z.kategorie||'úkol', titulek:z.titulek||'', scope:'firemní', zakazka:z.zakazka||'' };
+}
+function hotovo(id){ ulozPole(id,{stav:'hotovo', vyrizeno: new Date().toLocaleString('cs-CZ')+' – '+(aktualniRole||'')}); showToast('✓ Označeno jako hotové',true); }
+function znovuOtevrit(id){ ulozPole(id,{stav:'otevřeno', vyrizeno:''}); showToast('↩︎ Obnoveno',true); }
+let odstranitId=null, odstranitTrash=false;
+function odstranit(id){
+  odstranitId=id;
+  const p=vsechnyPolozky().find(x=>x.id===id)||{};
+  odstranitTrash = (p.zdroj==='e-mail');
+  const nazev = p.titulek||'tato položka';
+  if(odstranitTrash){
+    document.getElementById('odstranit-text').textContent = 'Přesunout e-mail „'+nazev+'" do koše v Gmailu?';
+    document.getElementById('odstranit-note').innerHTML = 'E-mail zmizí z přehledu a označí se k přesunutí do <b>koše v Gmailu</b> (vratné, Gmail ho drží ~30 dní). Vlastní přesun provede skript při dalším běhu — do té doby e-mail v Gmailu fyzicky zůstane.';
+    document.getElementById('odstranit-btn').textContent = '🗑 Ano, do koše';
+  } else {
+    document.getElementById('odstranit-text').textContent = 'Opravdu odstranit z přehledu: „'+nazev+'"?';
+    document.getElementById('odstranit-note').innerHTML = 'Nic se nikde nemaže — položka jen zmizí z přehledu. Najdeš ji ve filtru „Jen odstraněné / skryté" a tlačítkem Obnovit vrátíš zpět.';
+    document.getElementById('odstranit-btn').textContent = '🗑 Ano, odstranit z přehledu';
+  }
+  otevri('modal-odstranit');
+}
+function potvrdOdstranit(){
+  if(!odstranitId) return;
+  const patch = {stav:'skryto'};
+  if(odstranitTrash){ patch.do_kose='true'; patch.do_kose_cas=new Date().toISOString().slice(0,19); }
+  ulozPole(odstranitId, patch);
+  zavri('modal-odstranit');
+  showToast(odstranitTrash ? '🗑 Označeno do koše – přesun provede skript.' : '🗑 Odstraněno z přehledu.', true);
+  odstranitId=null; odstranitTrash=false;
+}
+function nastav_scope(id,v){ ulozPole(id,{scope:v}); }
+function nastav_kat(id,v){ ulozPole(id,{kategorie:v}); }
+function nastav_prio(id,v){ ulozPole(id,{priorita:v}); }
+function nastav_zakazka(id,v){
+  const p=vsechnyPolozky().find(x=>x.id===id)||{};
+  if((p.scope||'')==='soukromé') ulozPole(id,{stitek:v}); else ulozPole(id,{zakazka:v});
+}
+
+/* ----- Odložit / připomenout ----- */
+let odlozitId=null;
+function oteviOdlozit(id){ odlozitId=id; const d=new Date(); d.setDate(d.getDate()+3); document.getElementById('odlozit-datum').value=d.toISOString().split('T')[0]; otevri('modal-odlozit'); }
+function potvrdOdlozit(){
+  const dat=document.getElementById('odlozit-datum').value; if(!dat){ showToast('Vyber datum',false,true); return; }
+  ulozPole(odlozitId,{stav:'odloženo', pripomenout_od:dat}); zavri('modal-odlozit'); showToast('⏰ Odloženo do '+dat,true);
+}
+
+/* ----- Odpověď (návrh, neodesílá) ----- */
+function oteviOdpoved(id){
+  aktualniOdpoved=id; const p=vsechnyPolozky().find(x=>x.id===id)||{};
+  document.getElementById('odp-komu').value=p.protistrana||'';
+  const subj=(p.titulek||'').replace(/^(Re:|RE:|Fwd:)\s*/i,'');
+  document.getElementById('odp-predmet').value='Re: '+subj;
+  document.getElementById('odp-text').value=p.navrh_odpovedi||'';
+  otevri('modal-odpoved');
+}
+function ulozitNavrhOdpovedi(){
+  const text=document.getElementById('odp-text').value;
+  ulozPole(aktualniOdpoved,{ navrh_odpovedi:text, navrh_odpovedi_cas:new Date().toLocaleString('cs-CZ'), navrh_predmet:document.getElementById('odp-predmet').value });
+  zavri('modal-odpoved'); showToast('💾 Návrh uložen (nic se neodeslalo)',true);
+}
+function otevritGmail(){
+  const to=encodeURIComponent(emailZProtistrany(document.getElementById('odp-komu').value));
+  const su=encodeURIComponent(document.getElementById('odp-predmet').value);
+  const body=encodeURIComponent(document.getElementById('odp-text').value);
+  window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${su}&body=${body}`,'_blank');
+}
+function napsatEmail(id){
+  const p=vsechnyPolozky().find(x=>x.id===id)||{};
+  const to=encodeURIComponent(emailZProtistrany(p.protistrana));
+  const su=encodeURIComponent((p.titulek||'').replace(/^(Re:|Fwd:)\s*/i,''));
+  window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${su}`,'_blank');
+}
+
+/* ===================== SAMOSTATNÉ ZADÁNÍ (z hlavičky) ===================== */
+function oteviNovyUkol(){
+  ['nu-titulek','nu-termin','nu-zakazka'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('nu-scope').value='firemní';
+  document.getElementById('nu-priorita').value='';
+  otevri('modal-novy-ukol');
+}
+function ulozNovyUkol(){
+  const t=document.getElementById('nu-titulek').value.trim();
+  if(!t){ showToast('Zadej název úkolu',false,true); return; }
+  const scope=document.getElementById('nu-scope').value;
+  const zak=document.getElementById('nu-zakazka').value.trim();
+  const nid='task_local_'+Date.now();
+  db.collection('prehled').doc(nid).set({
+    id:nid, zdroj:'úkol', kategorie:'úkol', titulek:t,
+    protistrana:'', scope, zakazka: scope==='soukromé'?'':zak, stitek: scope==='soukromé'?zak:'',
+    priorita:document.getElementById('nu-priorita').value, termin:document.getElementById('nu-termin').value||'',
+    odkaz:'', stav:'otevřeno', poprve_videno:new Date().toISOString().slice(0,19), vyrizeno:'', sync_to_tasks:'true'
+  },{merge:true})
+  .then(()=>{ zavri('modal-novy-ukol'); showToast('➕ Úkol vytvořen (do Google Tasks ho přidá skript).',true); })
+  .catch(e=>{ console.error(e); showToast('⚠️ Nepodařilo se uložit (oprávnění?).',false,true); });
+}
+function oteviNovaUdalost(){
+  document.getElementById('ud-titulek').value=''; document.getElementById('ud-popis').value='';
+  document.getElementById('ud-datum').value=new Date().toISOString().split('T')[0];
+  otevri('modal-nova-udalost');
+}
+function otevritUdalost(){
+  const t=document.getElementById('ud-titulek').value.trim();
+  if(!t){ showToast('Zadej název události',false,true); return; }
+  const text=encodeURIComponent(t);
+  const det=encodeURIComponent(document.getElementById('ud-popis').value);
+  const dat=document.getElementById('ud-datum').value;
+  let dates=''; if(dat){ const d=dat.replace(/-/g,''); dates=`&dates=${d}/${d}`; }
+  window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&details=${det}${dates}`,'_blank');
+  zavri('modal-nova-udalost'); showToast('📅 Otevřel jsem událost – ulož ji v kalendáři.',true);
+}
+function oteviNovyEmail(){
+  ['ne-komu','ne-predmet','ne-text'].forEach(i=>document.getElementById(i).value='');
+  otevri('modal-novy-email');
+}
+function otevritNovyEmail(){
+  const to=encodeURIComponent(emailZProtistrany(document.getElementById('ne-komu').value)||document.getElementById('ne-komu').value);
+  const su=encodeURIComponent(document.getElementById('ne-predmet').value);
+  const body=encodeURIComponent(document.getElementById('ne-text').value);
+  window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${su}&body=${body}`,'_blank');
+  zavri('modal-novy-email'); showToast('✉️ Otevřel jsem Gmail – odešli ručně.',true);
+}
+
+/* ----- Do kalendáře (otevře předvyplněnou událost; uloží uživatel) ----- */
+function doKalendare(id){
+  const p=vsechnyPolozky().find(x=>x.id===id)||{};
+  const text=encodeURIComponent(p.titulek||'Úkol');
+  const det=encodeURIComponent('Z přehledu pošty. '+(p.protistrana?('Protistrana: '+p.protistrana):'')+(p.odkaz?('\n'+p.odkaz):''));
+  let dates='';
+  if(p.termin){ const d=p.termin.replace(/-/g,''); dates=`&dates=${d}/${d}`; }
+  window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&details=${det}${dates}`,'_blank');
+  showToast('📅 Otevřel jsem předvyplněnou událost – ulož ji v kalendáři.', true);
+}
+
+/* ----- Vytvořit úkol (založí položku v přehledu; do Google Tasks ji přidá skript) ----- */
+function vytvoritUkol(id){
+  const p=vsechnyPolozky().find(x=>x.id===id)||{};
+  const nid='task_local_'+Date.now();
+  db.collection('prehled').doc(nid).set({
+    id:nid, zdroj:'úkol', kategorie:'úkol', titulek:'Úkol: '+(p.titulek||''),
+    protistrana:p.protistrana||'', scope:p.scope||'firemní', zakazka:p.zakazka||'', stitek:p.stitek||'',
+    priorita:p.priorita||'', termin:'', odkaz:p.odkaz||'', stav:'otevřeno',
+    poprve_videno:new Date().toISOString().slice(0,19), vyrizeno:'',
+    sync_to_tasks:'true' // skript při dalším běhu přidá do Google Tasks
+  },{merge:true})
+  .then(()=>showToast('➕ Úkol založen v přehledu (do Google Tasks ho přidá skript).',true))
+  .catch(e=>{ console.error(e); showToast('⚠️ Nepodařilo se založit (oprávnění?).',false,true); });
+}
+
+/* ===================== RANNÍ SOUHRN (EmailJS) ===================== */
+function sestavHtmlSouhrn(){
+  const vse=vsechnyPolozky().filter(p=>(p.stav||'otevřeno')!=='hotovo');
+  const sek=(k)=> {
+    const items=vse.filter(p=>(p.kategorie||'')===k);
+    if(!items.length) return '';
+    let rows=items.map(p=>{
+      const t=p.termin?termTxt(p.termin).txt:'';
+      return `<tr><td style="padding:5px 8px;border-bottom:1px solid #eee">${esc(p.titulek||'')}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid #eee;color:#555">${esc(p.protistrana||'')}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid #eee;color:#555">${esc(p.zakazka||p.stitek||'')}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid #eee">${esc(t)}</td></tr>`;
+    }).join('');
+    return `<h3 style="color:#1f3864;font-size:14px;margin:14px 0 4px">${KAT[k].label} (${items.length})</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:12px"><tr style="background:#f3f5f7">
+      <th style="text-align:left;padding:5px 8px">Položka</th><th style="text-align:left;padding:5px 8px">Od/komu</th>
+      <th style="text-align:left;padding:5px 8px">Zakázka/štítek</th><th style="text-align:left;padding:5px 8px">Termín</th></tr>${rows}</table>`;
+  };
+  let body=KAT_PORADI.map(sek).join('');
+  if(!body) body='<p style="color:#666">Žádné otevřené položky. 🎉</p>';
+  return `<div style="font-family:Segoe UI,Arial,sans-serif;max-width:680px;margin:auto">
+    <h2 style="color:#1f3864">📨 Přehled pošty — ranní souhrn</h2>${body}
+    <p style="font-size:11px;color:#999;margin-top:16px">Automatický souhrn z aplikace Přehled pošty · ${new Date().toLocaleString('cs-CZ')}</p></div>`;
+}
+async function odeslatSouhrn(manual){
+  try{
+    const klic='prehled_souhrn_odeslano_'+dnesISO();
+    if(!manual && localStorage.getItem(klic)){ return; }
+    const datum=new Date().toLocaleDateString('cs-CZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      datum, html_content:sestavHtmlSouhrn(), name:'OPUS BUILD — Přehled pošty', email:'vitasek@opusbuild.cz'
+    });
+    localStorage.setItem(klic,'1');
+    if(manual) showToast('✅ Souhrn odeslán',true);
+  }catch(e){ console.error(e); if(manual) showToast('⚠️ Souhrn se nepodařilo odeslat',false,true); }
+}
+function naplanujRanniMail(){
+  if(window._mailNaplanovan) return; window._mailNaplanovan=true;
+  if(!(aktualniRole==='spravce'||aktualniRole==='priprava')) return;
+  // pokud už je po 7:00 a dnes neodesláno → pošli za 4 s po načtení
+  const ted=new Date();
+  if(ted.getHours()>=7 && !localStorage.getItem('prehled_souhrn_odeslano_'+dnesISO())){
+    setTimeout(()=>odeslatSouhrn(false), 4000);
+  }
+  // naplánuj příští 7:00
+  const cil=new Date(); cil.setHours(7,0,0,0); if(cil<=ted) cil.setDate(cil.getDate()+1);
+  setTimeout(function tik(){ odeslatSouhrn(false); setTimeout(tik, 24*3600*1000); }, cil-ted);
+}
+
+/* ===================== UI HELPERY ===================== */
+function otevri(id){ document.getElementById(id).classList.add('open'); }
+function zavri(id){ document.getElementById(id).classList.remove('open'); }
+function showToast(msg, ok, err){
+  const t=document.getElementById('toast'); t.textContent=msg;
+  t.className='show'+(ok?' ok':'')+(err?' err':'');
+  clearTimeout(window._toastT); window._toastT=setTimeout(()=>t.className=t.className.replace('show','').trim(), 3200);
+}
+document.querySelectorAll('.modal').forEach(m=> m.addEventListener('click', e=>{ if(e.target===m) m.classList.remove('open'); }));
+</script>
+</body>
+</html>
