@@ -343,7 +343,7 @@ body:not(.prihlasen) #main-obsah{display:none}
    Čte kolekci "prehled" (plní ji Apps Script z fází 1–3) + zakázky.
    Nic neodesílá ani nezakládá samo — vše je návrh ke schválení.
    ========================================================= */
-const APP_VERSION = 'v0.1';
+const APP_VERSION = 'v0.2';
 
 // ---- Firebase (stejný projekt jako Evidence zakázek) ----
 const firebaseConfig = {
@@ -713,6 +713,7 @@ function karta(p){
 
   const meta=[];
   if(p.protistrana) meta.push(`<b>${p.kategorie==='k odpovědi'||p.zdroj==='e-mail'?'Od':'Kdo'}:</b> ${esc(p.protistrana)}`);
+  if(p.zdroj==='e-mail'){ const d=p.datum || (p.poprve_videno?p.poprve_videno.replace('T',' ').slice(0,16):''); if(d) meta.push(`<b>Přišlo:</b> ${esc(d)}`); }
   if(p.vyrizeno) meta.push(`<b>Vyřízeno:</b> ${esc(p.vyrizeno)}`);
   if(skryto) meta.push(`🗑 odstraněno z přehledu`);
   if(stav==='odloženo'&&p.pripomenout_od) meta.push(`<b>Připomenout od:</b> ${esc(p.pripomenout_od)}`);
