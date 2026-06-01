@@ -351,7 +351,7 @@ body:not(.prihlasen) #main-obsah{display:none}
    Čte kolekci "prehled" (plní ji Apps Script z fází 1–3) + zakázky.
    Nic neodesílá ani nezakládá samo — vše je návrh ke schválení.
    ========================================================= */
-const APP_VERSION = 'v0.5';
+const APP_VERSION = 'v0.6';
 
 // ---- Firebase (stejný projekt jako Evidence zakázek) ----
 const firebaseConfig = {
@@ -609,7 +609,7 @@ function render(){
     [['k odpovědi','Na co musím odpovědět'],['dořešit','Co musím dořešit'],['čekám','Na co čekám odpověď']]
       .forEach(([k,lbl])=>{ const it=triditMail(mail.filter(p=>(p.kategorie||'')===k)); if(it.length){ html+=subt(lbl,it.length)+vykresli(it); } });
     const nez=triditMail(mail.filter(p=>!['k odpovědi','dořešit','čekám'].includes(p.kategorie||'')));
-    if(nez.length) html += subt('Nezatříděná pošta (čeká na chytré třídění – fáze 5)', nez.length) + vykresli(nez);
+    if(nez.length) html += subt('Ostatní pošta (jen pro informaci)', nez.length) + vykresli(nez);
   }
 
   // ===== PÁSMO 2: KALENDÁŘ =====
