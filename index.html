@@ -65,6 +65,12 @@ body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f0f2f5;
 .prio-box h2{font-size:14px;color:#9a3412;margin-bottom:8px;display:flex;align-items:center;gap:7px}
 .prio-box ol{margin-left:20px;font-size:13px;line-height:1.7;color:#7c2d12}
 .prio-box li b{color:#431407}
+.prio-box li{cursor:pointer;border-radius:6px;padding:1px 6px;margin-left:-6px;transition:background .12s}
+.prio-box li:hover{background:#fde9c8}
+.prio-box li .go{color:#b45309;font-size:11px;opacity:0;transition:opacity .12s}
+.prio-box li:hover .go{opacity:1}
+@keyframes cardFlash{0%{background:#fde68a}100%{background:#fff}}
+.card.flash{animation:cardFlash 1.6s ease-out}
 
 /* ===== CARDS ===== */
 .card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);padding:9px 13px;margin-bottom:7px;border-left:4px solid #ccc;position:relative}
@@ -184,6 +190,7 @@ body:not(.prihlasen) #main-obsah{display:none}
       <button class="btn" style="background:#0891b2;color:#fff" onclick="oteviNovyEmail()">✉️ E-mail</button>
       <button class="btn btn-light" onclick="aktualizovat()">🔄 Aktualizovat</button>
       <button class="btn btn-purple" id="btn-souhrn" onclick="odeslatSouhrn(true)" style="display:none">📧 Poslat souhrn</button>
+      <button class="btn btn-light" id="btn-sync" onclick="nastavSync()" title="Nastavit odkaz na synchronizaci (spuštění z tlačítka Aktualizovat)" style="display:none">⚙️</button>
       <a class="btn btn-light" href="https://opusbuild.github.io/evidence-zakazek/" target="_blank">📋 Evidence zakázek</a>
       <span id="user-badge" style="font-size:11px;opacity:.9"></span>
       <button class="btn btn-red" onclick="odhlasit()">Odhlásit</button>
@@ -352,7 +359,10 @@ body:not(.prihlasen) #main-obsah{display:none}
    Čte kolekci "prehled" (plní ji Apps Script z fází 1–3) + zakázky.
    Nic neodesílá ani nezakládá samo — vše je návrh ke schválení.
    ========================================================= */
-const APP_VERSION = 'v0.9';
+const APP_VERSION = 'v1.1';
+// Spuštění synchronizace na serveru (Apps Script Web App). URL si appka pamatuje v prohlížeči
+// (nastavíš ho tlačítkem ⚙️). Token musí být stejný jako WEB_TOKEN ve skriptu.
+const SYNC_TOKEN = 'opus-sync-2026';
 
 // ---- Firebase (stejný projekt jako Evidence zakázek) ----
 const firebaseConfig = {
@@ -440,7 +450,7 @@ firebase.auth().onAuthStateChanged(user=>{
     document.getElementById('user-badge').textContent=info.label;
     document.getElementById('login-btn').textContent='🔐 Přihlásit se';
     document.getElementById('login-btn').disabled=false;
-    if(info.role==='spravce'||info.role==='priprava') document.getElementById('btn-souhrn').style.display='inline-flex';
+    if(info.role==='spravce'||info.role==='priprava'){ document.getElementById('btn-souhrn').style.display='inline-flex'; document.getElementById('btn-sync').style.display='inline-flex'; }
     setTimeout(nactiData, 400);
   } else {
     aktualniRole=null;
@@ -478,11 +488,34 @@ function nactiData(){
   }
 }
 function aktualizovat(){
-  showToast('🔄 Načítám aktuální stav z databáze…');
-  // onSnapshot drží data živě; tlačítko jen vynutí překreslení a připomene, že
-  // NOVOU poštu z Gmailu natahuje až Apps Script (ten se spouští zvlášť).
-  render();
-  setTimeout(()=>showToast('Hotovo. Pozn.: nové e-maily přidá až běh skriptu (zatím ručně).', true), 600);
+  const url=(localStorage.getItem('prehled_sync_url')||'').trim();
+  if(!url && (aktualniRole==='spravce'||aktualniRole==='priprava')){
+    // poprvé: zeptej se na odkaz na synchronizaci (Web app URL z Apps Scriptu)
+    return nastavSync(true);
+  }
+  if(url){
+    showToast('🔄 Spouštím synchronizaci na serveru… (10–30 s)');
+    try{
+      fetch(url + (url.indexOf('?')>=0?'&':'?') + 'token=' + encodeURIComponent(SYNC_TOKEN), {mode:'no-cors', cache:'no-store'});
+    }catch(e){ console.warn('sync trigger:', e); }
+    // výsledek nejde z prohlížeče přečíst (no-cors), ale skript poštu načte;
+    // jakmile dopíše do databáze, přehled se obnoví sám (onSnapshot).
+    setTimeout(()=>{ render(); showToast('Skript pracuje – nové položky naskáčou samy během chvilky.', true); }, 1800);
+  } else {
+    // bez nastaveného odkazu jen překreslíme z databáze
+    showToast('🔄 Načítám aktuální stav z databáze…');
+    render();
+    setTimeout(()=>showToast('Hotovo. Nové e-maily přidá běh skriptu (časovač, nebo nastav ⚙️ synchronizaci).', true), 600);
+  }
+}
+// Nastavení / změna odkazu na server-side synchronizaci (uloží se jen v tomto prohlížeči)
+function nastavSync(spustitPoNastaveni){
+  const cur=(localStorage.getItem('prehled_sync_url')||'');
+  const url=prompt('Vlož odkaz na synchronizaci (Web app URL z Apps Scriptu, končí na /exec).\n\nNajdeš ho v Apps Scriptu: Nasadit → Nové nasazení → Webová aplikace → Nasadit → zkopíruj „URL webové aplikace".\n\n(Necháš-li prázdné, tlačítko Aktualizovat jen překreslí data.)', cur);
+  if(url===null) return; // Zrušit
+  const v=url.trim();
+  if(v){ localStorage.setItem('prehled_sync_url',v); showToast('✅ Synchronizace nastavena.',true); if(spustitPoNastaveni) setTimeout(aktualizovat,300); }
+  else { localStorage.removeItem('prehled_sync_url'); showToast('Server-side synchronizace vypnutá.',true); }
 }
 
 /* ===================== ODVOZENÍ POLOŽEK ZE ZAKÁZEK ===================== */
@@ -532,6 +565,16 @@ function jeCerstve(p){ // < 24 h od poprve_videno → Gmail nemusel zaindexovat 
   const t=new Date(p.poprve_videno); return (Date.now()-t.getTime()) < 24*3600*1000;
 }
 function emailZProtistrany(s){ const m=(s||'').match(/[\w.+-]+@[\w.-]+\.\w+/); return m?m[0]:''; }
+// kolik celých dní uplynulo od data (zvládne ISO i český "1. 6. 2026 17:39")
+function dniOd(s){
+  if(!s) return null;
+  let d=new Date(s);
+  if(isNaN(d)){ const m=String(s).match(/(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})/); if(m) d=new Date(+m[3],+m[2]-1,+m[1]); }
+  if(isNaN(d)) return null;
+  const a=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  const t=new Date(); const b=new Date(t.getFullYear(),t.getMonth(),t.getDate());
+  return Math.round((b-a)/(24*3600*1000));
+}
 function termTxt(t){
   if(!t) return '';
   const d=new Date(t), dnes=new Date(); dnes.setHours(0,0,0,0);
@@ -701,8 +744,27 @@ function renderPriority(vse){
   ol.innerHTML=top.map(x=>{
     const p=x.p; const t=p.termin?termTxt(p.termin):null;
     const kde=p.zakazka||p.stitek||'';
-    return `<li><b>${esc(p.titulek||'(bez názvu)')}</b>${kde?' — '+esc(kde):''}${t?' · '+esc(t.txt):''}</li>`;
+    return `<li onclick="skocNaKartu('${p.id}')" title="Otevřít položku v přehledu"><b>${esc(p.titulek||'(bez názvu)')}</b>${kde?' — '+esc(kde):''}${t?' · '+esc(t.txt):''} <span class="go">→ otevřít</span></li>`;
   }).join('');
+}
+
+// Klik na prioritu → skoč na příslušnou kartu, rozbal Detail a zvýrazni
+function skocNaKartu(id){
+  let el=document.getElementById('card_'+id);
+  if(!el){
+    // karta je nejspíš schovaná filtrem → zruš filtry a zkus znovu
+    zrusitFiltry();
+    el=document.getElementById('card_'+id);
+  }
+  if(!el){
+    // poslední záchrana: otevři přímo zdroj (Gmail / kalendář / úkol)
+    const rec=vsechnyPolozky().find(p=>p.id===id);
+    if(rec && rec.odkaz) window.open(rec.odkaz,'_blank');
+    return;
+  }
+  el.scrollIntoView({behavior:'smooth',block:'center'});
+  const det=el.querySelector('details'); if(det) det.open=true;
+  el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
 }
 
 /* ===================== KARTA ===================== */
@@ -738,12 +800,21 @@ function karta(p){
         : '<span class="badge b-uncertain">❓ vypadá bez odpovědi – ověř</span>';
     }
   } else if(p.kategorie==='čekám'){
-    badges += '<span class="badge b-uncertain">⏳ čekám na odpověď (odhad)</span>';
+    if(p.odeslano==='true'){
+      const dni=dniOd(p.datum||p.poprve_videno);
+      const txt = dni==null ? '📤 odesláno – čekám na odpověď'
+                : (dni===0 ? '📤 odesláno dnes – čekám na odpověď'
+                : '📤 čekám na odpověď '+dni+' '+(dni===1?'den':(dni<5?'dny':'dní')));
+      badges += `<span class="badge" style="background:#fef3c7;color:#92400e">${txt}</span>`;
+    } else {
+      badges += '<span class="badge b-uncertain">⏳ čekám na odpověď (odhad)</span>';
+    }
   }
 
   const meta=[];
-  if(p.protistrana) meta.push(`<b>${p.kategorie==='k odpovědi'||p.zdroj==='e-mail'?'Od':'Kdo'}:</b> ${esc(p.protistrana)}`);
-  if(p.zdroj==='e-mail'){ const d=p.datum || (p.poprve_videno?p.poprve_videno.replace('T',' ').slice(0,16):''); if(d) meta.push(`<b>Přišlo:</b> ${esc(d)}`); }
+  const jeOdeslane=(p.odeslano==='true');
+  if(p.protistrana) meta.push(`<b>${jeOdeslane?'Komu':(p.kategorie==='k odpovědi'||p.zdroj==='e-mail'?'Od':'Kdo')}:</b> ${esc(p.protistrana)}`);
+  if(p.zdroj==='e-mail'){ const d=p.datum || (p.poprve_videno?p.poprve_videno.replace('T',' ').slice(0,16):''); if(d) meta.push(`<b>${jeOdeslane?'Odesláno':'Přišlo'}:</b> ${esc(d)}`); }
   if(p.vyrizeno) meta.push(`<b>Vyřízeno:</b> ${esc(p.vyrizeno)}`);
   if(skryto) meta.push(`🗑 odstraněno z přehledu`);
   if(stav==='odloženo'&&p.pripomenout_od) meta.push(`<b>Připomenout od:</b> ${esc(p.pripomenout_od)}`);
@@ -782,7 +853,7 @@ function karta(p){
     + sel([['','— priorita —'],['vysoká','⭐ Vysoká'],['střední','⭐ Střední'],['nízká','⭐ Nízká']], p.priorita||'', 'nastav_prio')
     + zakInput;
 
-  return `<div class="card cat-${info.css} ${zavreno?'done':''}">
+  return `<div class="card cat-${info.css} ${zavreno?'done':''}" id="card_${esc(p.id)}">
     <div class="card-head">
       <div class="card-title">${esc(p.titulek||'(bez názvu)')}</div>
       <div class="card-acts">${akce}</div>
