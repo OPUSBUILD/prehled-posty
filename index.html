@@ -71,6 +71,25 @@ body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f0f2f5;
 .prio-box li:hover .go{opacity:1}
 @keyframes cardFlash{0%{background:#fde68a}100%{background:#fff}}
 .card.flash{animation:cardFlash 1.6s ease-out}
+/* karta, na které právě „jsem" (klik / šipky) */
+.card.aktivni{box-shadow:0 0 0 3px #2e75b6, 0 6px 18px rgba(31,56,100,.20);background:#f3f8ff}
+.card.aktivni.done{background:#eef2f7}
+
+/* ===== TISK ===== */
+@media print{
+  *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
+  body{background:#fff}
+  #login-screen,#toast,.modal,.filters,.stats,.header-btns{display:none !important}
+  .topbar{position:static !important;box-shadow:none}
+  .header{box-shadow:none}
+  .wrap{max-width:none;margin:0;padding:0 8px 8px}
+  .card-acts,.zat-group,.act,.card-detail>summary{display:none !important}
+  .card{box-shadow:none;border:1px solid #d8dee5;break-inside:avoid;page-break-inside:avoid}
+  .card.aktivni{box-shadow:none;background:#fff}
+  .band-title{break-after:avoid;page-break-after:avoid}
+  .prio-box{break-inside:avoid}
+  details.card-detail[open] .detail-body{display:block}
+}
 
 /* ===== CARDS ===== */
 .card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);padding:9px 13px;margin-bottom:7px;border-left:4px solid #ccc;position:relative}
@@ -189,6 +208,7 @@ body:not(.prihlasen) #main-obsah{display:none}
       <button class="btn" style="background:#2563eb;color:#fff" onclick="oteviNovaUdalost()">📅 Událost</button>
       <button class="btn" style="background:#0891b2;color:#fff" onclick="oteviNovyEmail()">✉️ E-mail</button>
       <button class="btn btn-light" onclick="aktualizovat()">🔄 Aktualizovat</button>
+      <button class="btn btn-light" onclick="window.print()" title="Vytisknout, co je právě vidět (i podle filtru)">🖨️ Tisk</button>
       <button class="btn btn-purple" id="btn-souhrn" onclick="odeslatSouhrn(true)" style="display:none">📧 Poslat souhrn</button>
       <button class="btn btn-light" id="btn-sync" onclick="nastavSync()" title="Nastavit odkaz na synchronizaci (spuštění z tlačítka Aktualizovat)" style="display:none">⚙️</button>
       <a class="btn btn-light" href="https://opusbuild.github.io/evidence-zakazek/" target="_blank">📋 Evidence zakázek</a>
@@ -359,7 +379,7 @@ body:not(.prihlasen) #main-obsah{display:none}
    Čte kolekci "prehled" (plní ji Apps Script z fází 1–3) + zakázky.
    Nic neodesílá ani nezakládá samo — vše je návrh ke schválení.
    ========================================================= */
-const APP_VERSION = 'v1.1';
+const APP_VERSION = 'v1.2';
 // Spuštění synchronizace na serveru (Apps Script Web App). URL si appka pamatuje v prohlížeči
 // (nastavíš ho tlačítkem ⚙️). Token musí být stejný jako WEB_TOKEN ve skriptu.
 const SYNC_TOKEN = 'opus-sync-2026';
@@ -748,6 +768,21 @@ function renderPriority(vse){
   }).join('');
 }
 
+// id karty, na které právě „jsem" (zvýrazněná). Přežije i překreslení (viz karta()).
+let aktivniKartaId = null;
+
+// Nastav aktivní kartu: zvýrazni, volitelně rozbal Detail a odscrolluj k ní.
+function setAktivni(id, scroll, rozbalDetail){
+  aktivniKartaId = id;
+  document.querySelectorAll('#sekce .card.aktivni').forEach(c=> c.classList.remove('aktivni'));
+  const el = document.getElementById('card_'+id);
+  if(!el) return null;
+  el.classList.add('aktivni');
+  if(rozbalDetail){ const det=el.querySelector('details'); if(det) det.open=true; }
+  if(scroll) el.scrollIntoView({behavior:'smooth', block:'center'});
+  return el;
+}
+
 // Klik na prioritu → skoč na příslušnou kartu, rozbal Detail a zvýrazni
 function skocNaKartu(id){
   let el=document.getElementById('card_'+id);
@@ -762,10 +797,34 @@ function skocNaKartu(id){
     if(rec && rec.odkaz) window.open(rec.odkaz,'_blank');
     return;
   }
-  el.scrollIntoView({behavior:'smooth',block:'center'});
-  const det=el.querySelector('details'); if(det) det.open=true;
+  setAktivni(id, true, true);
   el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
 }
+
+// Šipky ↑/↓ procházejí karty; u aktivní se rozbalí Detail, předchozí se zavře.
+function viditelneKarty(){ return Array.from(document.querySelectorAll('#sekce .card')); }
+function posunAktivni(dir){
+  const karty=viditelneKarty(); if(!karty.length) return;
+  let idx=karty.findIndex(c=> c.id==='card_'+aktivniKartaId);
+  if(idx<0) idx = (dir>0 ? -1 : 0);
+  const novy=Math.max(0, Math.min(karty.length-1, idx+dir));
+  const cilId=karty[novy].id.replace(/^card_/, '');
+  // zavři Detail u dosud aktivní (otevřené navigací)
+  if(aktivniKartaId && aktivniKartaId!==cilId){
+    const prev=document.getElementById('card_'+aktivniKartaId);
+    if(prev){ const d=prev.querySelector('details'); if(d) d.open=false; }
+  }
+  setAktivni(cilId, true, true);
+}
+// poslouchání kláves – jen mimo psaní do polí a mimo otevřené okno
+document.addEventListener('keydown', function(e){
+  const tag=(e.target && e.target.tagName || '').toLowerCase();
+  if(tag==='input'||tag==='textarea'||tag==='select') return;
+  if(document.querySelector('.modal.open')) return;
+  if(!document.body.classList.contains('prihlasen')) return;
+  if(e.key==='ArrowDown'){ e.preventDefault(); posunAktivni(1); }
+  else if(e.key==='ArrowUp'){ e.preventDefault(); posunAktivni(-1); }
+});
 
 /* ===================== KARTA ===================== */
 let editujici = new Set();
@@ -853,7 +912,7 @@ function karta(p){
     + sel([['','— priorita —'],['vysoká','⭐ Vysoká'],['střední','⭐ Střední'],['nízká','⭐ Nízká']], p.priorita||'', 'nastav_prio')
     + zakInput;
 
-  return `<div class="card cat-${info.css} ${zavreno?'done':''}" id="card_${esc(p.id)}">
+  return `<div class="card cat-${info.css} ${zavreno?'done':''} ${p.id===aktivniKartaId?'aktivni':''}" id="card_${esc(p.id)}" onclick="setAktivni('${p.id}',false,false)">
     <div class="card-head">
       <div class="card-title">${esc(p.titulek||'(bez názvu)')}</div>
       <div class="card-acts">${akce}</div>
