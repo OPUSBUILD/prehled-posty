@@ -209,6 +209,7 @@ body:not(.prihlasen) #main-obsah{display:none}
       <option value="skryte">Jen odstraněné / skryté</option>
     </select>
     <input id="filter-search" placeholder="🔎 Hledat…" oninput="render()" style="min-width:160px">
+    <button class="btn btn-sm" id="btn-neprectene" onclick="prepniNeprectene()" style="background:#dbeafe;color:#1e40af">🔵 Nepřečtené</button>
     <button class="btn btn-gray btn-sm" onclick="zrusitFiltry()">✕ Zrušit filtry</button>
   </div>
   </div><!-- /topbar -->
@@ -351,7 +352,7 @@ body:not(.prihlasen) #main-obsah{display:none}
    Čte kolekci "prehled" (plní ji Apps Script z fází 1–3) + zakázky.
    Nic neodesílá ani nezakládá samo — vše je návrh ke schválení.
    ========================================================= */
-const APP_VERSION = 'v0.8';
+const APP_VERSION = 'v0.9';
 
 // ---- Firebase (stejný projekt jako Evidence zakázek) ----
 const firebaseConfig = {
@@ -387,6 +388,7 @@ let zakazkyData = {};     // zakazky/data
 let aktivniScope = '';
 let aktivniKategorie = ''; // filtr ze stat karet (kategorie) – zachováno pro kompatibilitu
 let aktivniZdroj = '';     // filtr ze stat karet (zdroj/pásmo)
+let jenNeprectene = false; // filtr: zobrazit jen nepřečtené e-maily
 let aktualniOdpoved = null; // id položky, ke které píšu odpověď
 
 // Kategorie: klíč -> {label, css, badge}
@@ -547,14 +549,23 @@ function setScope(s){
   document.querySelectorAll('#seg-scope button').forEach(b=> b.classList.toggle('on', b.dataset.scope===s));
   render();
 }
+function prepniNeprectene(){
+  jenNeprectene = !jenNeprectene;
+  const b=document.getElementById('btn-neprectene');
+  b.style.background = jenNeprectene ? '#1e40af' : '#dbeafe';
+  b.style.color = jenNeprectene ? '#fff' : '#1e40af';
+  render();
+}
 function zrusitFiltry(){
-  aktivniScope=''; aktivniKategorie=''; aktivniZdroj='';
+  aktivniScope=''; aktivniKategorie=''; aktivniZdroj=''; jenNeprectene=false;
+  const b=document.getElementById('btn-neprectene'); b.style.background='#dbeafe'; b.style.color='#1e40af';
   document.getElementById('filter-zakazka').value='';
   document.getElementById('filter-stav').value='otevrene';
   document.getElementById('filter-search').value='';
   setScope('');
 }
 function projdeFiltr(p){
+  if(jenNeprectene && !(p.zdroj==='e-mail' && p.neprecteno==='true')) return false;
   const stavF=document.getElementById('filter-stav').value;
   const stav=p.stav||'otevřeno';
   if(stavF==='otevrene'){
