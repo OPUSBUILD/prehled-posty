@@ -79,6 +79,11 @@ body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f0f2f5;
 .card-acts{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;flex-shrink:0;max-width:64%}
 .card-info{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;margin-top:7px}
 .card-meta{font-size:11px;color:#6b7280;line-height:1.4}
+.card-detail{margin-top:4px;font-size:12px}
+.card-detail>summary{cursor:pointer;color:#2563eb;font-weight:600;list-style:none;width:fit-content}
+.card-detail>summary::-webkit-details-marker{display:none}
+.detail-body{margin-top:5px;padding:8px 10px;background:#f8fafc;border:1px solid #e8ecf0;border-radius:8px;color:#334155;line-height:1.5}
+.detail-body>div{margin:2px 0}
 .card-meta b{color:#374151}
 .badges{display:flex;gap:5px;flex-wrap:wrap}
 .zat-group{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:auto;padding-left:18px}
@@ -346,7 +351,7 @@ body:not(.prihlasen) #main-obsah{display:none}
    Čte kolekci "prehled" (plní ji Apps Script z fází 1–3) + zakázky.
    Nic neodesílá ani nezakládá samo — vše je návrh ke schválení.
    ========================================================= */
-const APP_VERSION = 'v0.4';
+const APP_VERSION = 'v0.5';
 
 // ---- Firebase (stejný projekt jako Evidence zakázek) ----
 const firebaseConfig = {
@@ -725,6 +730,14 @@ function karta(p){
   if(stav==='odloženo'&&p.pripomenout_od) meta.push(`<b>Připomenout od:</b> ${esc(p.pripomenout_od)}`);
   if(p.navrh_odpovedi) meta.push(`📝 uložen návrh odpovědi`);
 
+  // rozklik „Detail": shrnutí od AI, párování, místo/čas, poznámka
+  const detailParts=[];
+  if(p.shrnuti) detailParts.push(`<div><b>📋 Shrnutí:</b> ${esc(p.shrnuti)}</div>`);
+  if(p.ai_pozn) detailParts.push(`<div><b>🔗 Párování:</b> ${esc(p.ai_pozn)}</div>`);
+  if(p.zdroj==='kalendář'){ if(p.misto) detailParts.push(`<div><b>📍 Místo:</b> ${esc(p.misto)}</div>`); if(p.cas) detailParts.push(`<div><b>🕒 Čas:</b> ${esc(p.cas)}</div>`); }
+  if(p.zdroj==='úkol' && p.poznamka) detailParts.push(`<div><b>📝 Poznámka:</b> ${esc(p.poznamka)}</div>`);
+  const detail = detailParts.length ? `<details class="card-detail"><summary>▾ Detail</summary><div class="detail-body">${detailParts.join('')}</div></details>` : '';
+
   // akce
   let akce='';
   if(zavreno){
@@ -758,6 +771,7 @@ function karta(p){
     <div class="card-info">
       <div class="badges">${badges}</div>
       ${meta.length?`<span class="card-meta">${meta.join(' &nbsp;·&nbsp; ')}</span>`:''}
+      ${detail}
       <div class="zat-group">
         <span class="zat-label">Zatřídit:</span>
         ${editControls}
