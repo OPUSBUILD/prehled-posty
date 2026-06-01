@@ -53,6 +53,22 @@ body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f0f2f5;
 
 /* ===== LAYOUT ===== */
 .wrap{padding:16px 24px 60px;max-width:1180px;margin:0 auto}
+
+/* ===== LEVÉ RYCHLÉ MENU ===== */
+.leva-nav{display:none;position:fixed;left:14px;top:200px;width:212px;max-height:calc(100vh - 220px);overflow:auto;background:#fff;border:1px solid #e8ecf0;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.07);padding:10px 8px;z-index:50}
+.leva-nav h4{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:#8a93a0;margin:2px 8px 8px;font-weight:700}
+.leva-nav a{display:flex;justify-content:space-between;gap:8px;align-items:center;text-decoration:none;color:#1f3864;font-size:12.5px;font-weight:600;padding:6px 8px;border-radius:8px;cursor:pointer}
+.leva-nav a.sub{font-weight:500;color:#475569;font-size:12px;padding-left:18px}
+.leva-nav a:hover{background:#eef2f7}
+.leva-nav a.prio{color:#9a3412;font-weight:700}
+.leva-nav a.prio:hover{background:#fde9c8}
+.leva-nav a.prio .n{background:#fed7aa;color:#9a3412}
+.leva-nav .n{background:#eef2f7;color:#1f3864;border-radius:20px;padding:0 8px;font-size:11px;min-width:22px;text-align:center;flex-shrink:0}
+@media (min-width:1280px){
+  .leva-nav{display:block}
+  .wrap{margin-left:240px}
+}
+@media print{ .leva-nav{display:none !important} .wrap{margin-left:auto !important} }
 .band-title{font-size:15px;font-weight:800;color:#fff;background:linear-gradient(135deg,#1f3864,#2e75b6);border-radius:10px;padding:10px 15px;margin:26px 0 12px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 8px rgba(31,56,100,.18)}
 .band-title:first-child{margin-top:4px}
 .band-title .pill{background:rgba(255,255,255,.22);color:#fff;border-radius:20px;padding:1px 10px;font-size:12px}
@@ -241,6 +257,8 @@ body:not(.prihlasen) #main-obsah{display:none}
   </div>
   </div><!-- /topbar -->
 
+  <div id="leva-nav" class="leva-nav"></div>
+
   <div class="wrap">
     <!-- DNEŠNÍ PRIORITY -->
     <div class="prio-box" id="prio-box">
@@ -379,7 +397,7 @@ body:not(.prihlasen) #main-obsah{display:none}
    Čte kolekci "prehled" (plní ji Apps Script z fází 1–3) + zakázky.
    Nic neodesílá ani nezakládá samo — vše je návrh ke schválení.
    ========================================================= */
-const APP_VERSION = 'v1.2';
+const APP_VERSION = 'v1.4';
 // Spuštění synchronizace na serveru (Apps Script Web App). URL si appka pamatuje v prohlížeči
 // (nastavíš ho tlačítkem ⚙️). Token musí být stejný jako WEB_TOKEN ve skriptu.
 const SYNC_TOKEN = 'opus-sync-2026';
@@ -672,37 +690,63 @@ function render(){
   // pošta: nejnovější nahoře (podle data přijetí)
   const datKlic = p => (p.datum || (p.poprve_videno||'').replace('T',' ') || '');
   const triditMail = arr => arr.sort((a,b)=> datKlic(b).localeCompare(datKlic(a)));
-  const band  = (lbl,n)=> `<div class="band-title">${lbl} <span class="pill">${n}</span></div>`;
-  const subt  = (lbl,n)=> `<div class="section-title">${esc(lbl)} <span class="pill">${n}</span></div>`;
+  const nav=[];
+  const band  = (lbl,n,id)=>{ nav.push({id,lbl,n,sub:false}); return `<div class="band-title" id="${id}">${lbl} <span class="pill">${n}</span></div>`; };
+  const subt  = (lbl,n,id)=>{ nav.push({id,lbl,n,sub:true}); return `<div class="section-title" id="${id}">${esc(lbl)} <span class="pill">${n}</span></div>`; };
   const vykresli = arr => arr.map(karta).join('');
 
   // ===== PÁSMO 1: POŠTA (e-maily) — nahoře, to je smysl projektu =====
   const mail = viditelne.filter(p=>p.zdroj==='e-mail');
   if(mail.length){
-    html += band('📨 Pošta', mail.length);
-    [['k odpovědi','Na co musím odpovědět'],['dořešit','Co musím dořešit'],['čekám','Na co čekám odpověď']]
-      .forEach(([k,lbl])=>{ const it=triditMail(mail.filter(p=>(p.kategorie||'')===k)); if(it.length){ html+=subt(lbl,it.length)+vykresli(it); } });
+    html += band('📨 Pošta', mail.length, 'nb-mail');
+    [['k odpovědi','Na co musím odpovědět','ns-kodp'],['dořešit','Co musím dořešit','ns-doresit'],['čekám','Na co čekám odpověď','ns-cekam']]
+      .forEach(([k,lbl,id])=>{ const it=triditMail(mail.filter(p=>(p.kategorie||'')===k)); if(it.length){ html+=subt(lbl,it.length,id)+vykresli(it); } });
     const nez=triditMail(mail.filter(p=>!['k odpovědi','dořešit','čekám'].includes(p.kategorie||'')));
-    if(nez.length) html += subt('Ostatní pošta (jen pro informaci)', nez.length) + vykresli(nez);
+    if(nez.length) html += subt('Ostatní pošta (jen pro informaci)', nez.length, 'ns-ostpost') + vykresli(nez);
   }
 
   // ===== PÁSMO 2: KALENDÁŘ =====
   const cal = tridit(viditelne.filter(p=>p.zdroj==='kalendář'));
-  if(cal.length) html += band('📅 Kalendář', cal.length) + vykresli(cal);
+  if(cal.length) html += band('📅 Kalendář', cal.length, 'nb-cal') + vykresli(cal);
 
   // ===== PÁSMO 3: ÚKOLY (Google Tasks) =====
   const task = tridit(viditelne.filter(p=>p.zdroj==='úkol'));
-  if(task.length) html += band('✅ Úkoly', task.length) + vykresli(task);
+  if(task.length) html += band('✅ Úkoly', task.length, 'nb-task') + vykresli(task);
 
   // ===== PÁSMO 4: TERMÍNY A ZAKÁZKY (z Evidence zakázek) — až na konci =====
   const zak = tridit(viditelne.filter(p=>p.zdroj==='zakázka'));
-  if(zak.length) html += band('🏗️ Termíny a zakázky', zak.length) + vykresli(zak);
+  if(zak.length) html += band('🏗️ Termíny a zakázky', zak.length, 'nb-zak') + vykresli(zak);
 
   // cokoliv s neznámým zdrojem
   const ost = tridit(viditelne.filter(p=>!['e-mail','zakázka','kalendář','úkol'].includes(p.zdroj)));
-  if(ost.length) html += band('Ostatní', ost.length) + vykresli(ost);
+  if(ost.length) html += band('Ostatní', ost.length, 'nb-ost') + vykresli(ost);
 
   sekce.innerHTML = html || '<div class="empty">Žádné položky neodpovídají filtru. 🎉</div>';
+  renderLevaNav(nav);
+}
+
+// Levé rychlé menu – vypíše právě zobrazené sekce s počty; klik = sjede k sekci.
+function renderLevaNav(nav){
+  const box=document.getElementById('leva-nav'); if(!box) return;
+  const items=[];
+  // „Dnešní priority" jako první – jen když je box priorit vidět
+  const pb=document.getElementById('prio-box');
+  if(pb && pb.style.display!=='none'){
+    const pc=document.querySelectorAll('#prio-list li').length;
+    items.push({id:'prio-box', lbl:'🎯 Dnešní priority', n:pc, sub:false, prio:true});
+  }
+  nav.forEach(x=>items.push(x));
+  if(!items.length){ box.innerHTML=''; return; }
+  let h='<h4>Rychlá navigace</h4>';
+  items.forEach(x=>{ h+=`<a class="${x.sub?'sub':''}${x.prio?' prio':''}" onclick="skocNaSekci('${x.id}')">${esc(x.lbl)} <span class="n">${x.n}</span></a>`; });
+  box.innerHTML=h;
+}
+// Sjede k sekci a počítá s přilepenou horní lištou.
+function skocNaSekci(id){
+  const el=document.getElementById(id); if(!el) return;
+  const tb=document.querySelector('.topbar'); const odsazeni=(tb?tb.offsetHeight:0)+8;
+  const top=el.getBoundingClientRect().top + window.pageYOffset - odsazeni;
+  window.scrollTo({top, behavior:'smooth'});
 }
 
 function renderStats(vse){
