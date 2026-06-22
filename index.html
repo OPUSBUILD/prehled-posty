@@ -253,6 +253,7 @@ body:not(.prihlasen) #main-obsah{display:none}
     </select>
     <input id="filter-search" placeholder="🔎 Hledat…" oninput="render()" style="min-width:160px">
     <button class="btn btn-sm" id="btn-neprectene" onclick="prepniNeprectene()" style="background:#dbeafe;color:#1e40af">🔵 Nepřečtené</button>
+    <button class="btn btn-sm" id="btn-starsi" onclick="prepniStarsi()" style="display:none;background:#e8ecf0;color:#1a1a2e">🗂 Starší pošta</button>
     <button class="btn btn-gray btn-sm" onclick="zrusitFiltry()">✕ Zrušit filtry</button>
   </div>
   </div><!-- /topbar -->
@@ -397,10 +398,13 @@ body:not(.prihlasen) #main-obsah{display:none}
    Čte kolekci "prehled" (plní ji Apps Script z fází 1–3) + zakázky.
    Nic neodesílá ani nezakládá samo — vše je návrh ke schválení.
    ========================================================= */
-const APP_VERSION = 'v1.4';
+const APP_VERSION = 'v1.6';
 // Spuštění synchronizace na serveru (Apps Script Web App). URL si appka pamatuje v prohlížeči
 // (nastavíš ho tlačítkem ⚙️). Token musí být stejný jako WEB_TOKEN ve skriptu.
 const SYNC_TOKEN = 'opus-sync-2026';
+// Horizont pošty: kolik dní zpět ukazovat e-maily v hlavním přehledu.
+// Starší pošta se schová (zůstává jedním klikem dostupná). Klidně změň na 7 (přísnější) nebo 30 (mírnější).
+const MAIL_OKNO_DNI = 14;
 
 // ---- Firebase (stejný projekt jako Evidence zakázek) ----
 const firebaseConfig = {
@@ -437,6 +441,7 @@ let aktivniScope = '';
 let aktivniKategorie = ''; // filtr ze stat karet (kategorie) – zachováno pro kompatibilitu
 let aktivniZdroj = '';     // filtr ze stat karet (zdroj/pásmo)
 let jenNeprectene = false; // filtr: zobrazit jen nepřečtené e-maily
+let zobrazitStarsiPostu = false; // když true, dočasně ukáže i poštu starší než MAIL_OKNO_DNI
 let aktualniOdpoved = null; // id položky, ke které píšu odpověď
 
 // Kategorie: klíč -> {label, css, badge}
@@ -591,7 +596,13 @@ function vsechnyPolozky(){
     if(map[z.id]) map[z.id]={...z, ...map[z.id], _zak:true, titulek:z.titulek, termin:z.termin, zakazka:z.zakazka};
     else map[z.id]=z;
   });
-  return Object.values(map);
+  // Kalendář: prošlé události (termín před dneškem) už nepřipomínáme — schůzka buď proběhla, nebo ne.
+  // Necháváme jen DNEŠNÍ a BUDOUCÍ. Týká se VÝHRADNĚ kalendáře; e-maily, úkoly i zakázky zůstávají beze změny.
+  return Object.values(map).filter(p=>{
+    if(p.zdroj!=='kalendář') return true;
+    const d=dniOd(p.termin);   // >0 = minulost, 0 = dnes, <0 = budoucnost, null = neznámé datum
+    return !(d!==null && d>0);
+  });
 }
 
 /* ===================== POMOCNÉ ===================== */
@@ -638,7 +649,7 @@ function prepniNeprectene(){
   render();
 }
 function zrusitFiltry(){
-  aktivniScope=''; aktivniKategorie=''; aktivniZdroj=''; jenNeprectene=false;
+  aktivniScope=''; aktivniKategorie=''; aktivniZdroj=''; jenNeprectene=false; zobrazitStarsiPostu=false;
   const b=document.getElementById('btn-neprectene'); b.style.background='#dbeafe'; b.style.color='#1e40af';
   document.getElementById('filter-zakazka').value='';
   document.getElementById('filter-stav').value='otevrene';
@@ -669,12 +680,50 @@ function projdeFiltr(p){
   return true;
 }
 
+/* ===== HORIZONT POŠTY (ať přehled nepřetéká starou poštou) ===== */
+// E-mail starší než MAIL_OKNO_DNI dní se v hlavním (otevřeném) pohledu schová.
+// Týká se VÝHRADNĚ pošty; kalendář, úkoly a zakázky zůstávají.
+function mailMimoOkno(p){
+  if(p.zdroj!=='e-mail') return false;
+  const zaklad = (p.datum || p.poprve_videno || '').slice(0,10);
+  const d = dniOd(zaklad);            // >0 = v minulosti; null = neznámé datum (nechá zobrazené)
+  return d!==null && d>MAIL_OKNO_DNI;
+}
+// Horizont platí jen v běžném „Otevřené" pohledu – při hledání, výběru zakázky
+// nebo jiném stavovém filtru se zruší, ať najdeš i starší poštu.
+function horizontZapnuty(){
+  if(zobrazitStarsiPostu) return false;
+  if(document.getElementById('filter-stav').value!=='otevrene') return false;
+  if(document.getElementById('filter-search').value.trim()) return false;
+  if(document.getElementById('filter-zakazka').value) return false;
+  return true;
+}
+function prepniStarsi(){
+  zobrazitStarsiPostu = !zobrazitStarsiPostu;
+  render();
+}
+function aktualizujTlacitkoStarsi(pocetSkrytych){
+  const b=document.getElementById('btn-starsi'); if(!b) return;
+  if(zobrazitStarsiPostu){
+    b.textContent='🗂 Skrýt starší poštu';
+    b.style.background='#1e40af'; b.style.color='#fff'; b.style.display='inline-flex';
+  } else if(pocetSkrytych>0){
+    b.textContent='🗂 Starší pošta ('+pocetSkrytych+')';
+    b.style.background='#e8ecf0'; b.style.color='#1a1a2e'; b.style.display='inline-flex';
+  } else {
+    b.style.display='none';
+  }
+}
+
 /* ===================== RENDER ===================== */
 function render(){
-  const vse=vsechnyPolozky();
+  const vseFull=vsechnyPolozky();
+  const horizont=horizontZapnuty();
+  const vse = horizont ? vseFull.filter(p=>!mailMimoOkno(p)) : vseFull;
+  aktualizujTlacitkoStarsi(horizont ? vseFull.filter(mailMimoOkno).length : 0);
   renderStats(vse);
-  renderZakazkaFilter(vse);
-  naplnDatalist(vse);
+  renderZakazkaFilter(vseFull);
+  naplnDatalist(vseFull);
   renderPriority(vse);
 
   const viditelne=vse.filter(projdeFiltr);
@@ -1133,7 +1182,7 @@ function vytvoritUkol(id){
 
 /* ===================== RANNÍ SOUHRN (EmailJS) ===================== */
 function sestavHtmlSouhrn(){
-  const vse=vsechnyPolozky().filter(p=>(p.stav||'otevřeno')!=='hotovo');
+  const vse=vsechnyPolozky().filter(p=>(p.stav||'otevřeno')!=='hotovo' && !mailMimoOkno(p));
   const sek=(k)=> {
     const items=vse.filter(p=>(p.kategorie||'')===k);
     if(!items.length) return '';
