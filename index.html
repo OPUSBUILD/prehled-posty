@@ -189,6 +189,10 @@ body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f0f2f5;
 
 body:not(.prihlasen) #main-obsah{display:none}
 @media(max-width:640px){.wrap{padding:12px 12px 50px}.header{padding:12px 14px}.stats,.filters{padding-left:14px;padding-right:14px}}
+#ac-pop{position:absolute;z-index:2000;background:#fff;border:1px solid #cfd6dd;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.16);max-height:260px;overflow:auto;display:none}
+#ac-pop div{padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid #f0f2f5;color:#1f3864}
+#ac-pop div:last-child{border-bottom:none}
+#ac-pop div:hover{background:#eef2f7}
 </style>
 </head>
 <body>
@@ -320,7 +324,7 @@ body:not(.prihlasen) #main-obsah{display:none}
       <label>Zařazení</label>
       <select id="nu-scope"><option value="firemní">🏢 firemní</option><option value="soukromé">🏠 soukromé</option></select>
       <label>Zakázka / štítek (našeptává)</label>
-      <input id="nu-zakazka" list="zakazky-list" oninput="naseptej(this,'zak')" placeholder="začni psát…">
+      <input id="nu-zakazka" autocomplete="off" oninput="acShow(this,'zak')" onfocus="acShow(this,'zak')" onblur="acHide()" placeholder="začni psát…">
       <label>Priorita</label>
       <select id="nu-priorita"><option value="">— priorita —</option><option value="vysoká">⭐ Vysoká</option><option value="střední">⭐ Střední</option><option value="nízká">⭐ Nízká</option></select>
       <div class="note-inline">Úkol se uloží do přehledu. Do Google Tasks ho přidá skript při dalším běhu. Nic se neodešle.</div>
@@ -389,6 +393,7 @@ body:not(.prihlasen) #main-obsah{display:none}
 
 <datalist id="zakazky-list"></datalist>
 <datalist id="stitky-list"></datalist>
+<div id="ac-pop"></div>
 <div id="toast"></div>
 
 <script>
@@ -398,7 +403,7 @@ body:not(.prihlasen) #main-obsah{display:none}
    Čte kolekci "prehled" (plní ji Apps Script z fází 1–3) + zakázky.
    Nic neodesílá ani nezakládá samo — vše je návrh ke schválení.
    ========================================================= */
-const APP_VERSION = 'v1.12';
+const APP_VERSION = 'v1.13';
 // Spuštění synchronizace na serveru (Apps Script Web App). URL si appka pamatuje v prohlížeči
 // (nastavíš ho tlačítkem ⚙️). Token musí být stejný jako WEB_TOKEN ve skriptu.
 const SYNC_TOKEN = 'opus-sync-2026';
@@ -828,34 +833,54 @@ function renderZakazkaFilter(vse){
   sel.innerHTML=opts.join(''); sel.value=cur;
 }
 
-// Našeptávač: nabídne názvy AKTIVNÍCH zakázek/štítků – NE číselná ID, a teprve když uživatel píše (≥2 znaky)
+// ===== VLASTNÍ NAŠEPTÁVAČ ZAKÁZEK/ŠTÍTKŮ =====
 function jeCisloPozadavku(v){ return /^\d{3,7}$/.test(String(v).trim()); } // čistě 3–7místné číslo = ID požadavku
-let ZAK_NAPOVEDA=[], STIT_NAPOVEDA=[];   // seznamy názvů pro našeptávání
+function norm_(s){ return (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); } // bez háčků/čárek
+let ZAK_NAPOVEDA=[], STIT_NAPOVEDA=[];   // {v:vložit, h:hledat}
+let acTarget=null;
+
+// Sestaví seznamy pro našeptávání (adresa + popis + dosud použité hodnoty; čísla požadavků vynechá)
 function naplnDatalist(vse){
-  const zak=new Set(), stit=new Set();
-  // jen AKTIVNÍ zakázky z Evidence (vyfakturované/stornované/dokončené už nenabízíme)
-  (zakazkyData.pozadavky||[]).forEach(z=>{
-    if(!z || !z.adresa) return;
-    if(UZAVRENE_ZAK.includes((z.stav||'').trim())) return;
-    zak.add(String(z.adresa).trim());
+  const zak=[], stit=[], zs={}, ss={};
+  const addZ=(v,h)=>{ v=(v||'').toString().trim(); if(!v||jeCisloPozadavku(v)) return; const k=v.toLowerCase(); if(zs[k])return; zs[k]=1; zak.push({v,h:norm_(h||v)}); };
+  const addS=(v)=>{ v=(v||'').toString().trim(); if(!v) return; const k=v.toLowerCase(); if(ss[k])return; ss[k]=1; stit.push({v,h:norm_(v)}); };
+  ['pozadavky','vyfakturovane','stornovane'].forEach(klic=>{
+    (zakazkyData[klic]||[]).forEach(z=>{ if(!z||!z.adresa) return; const a=String(z.adresa).trim(); addZ(a, a+' '+(z.popis||'')); });
   });
-  // už použité hodnoty z přehledu (ale ne číselná ID požadavků)
-  vse.forEach(p=>{ if(p.zakazka && !jeCisloPozadavku(p.zakazka)) zak.add(p.zakazka); if(p.stitek) stit.add(p.stitek); });
-  ZAK_NAPOVEDA=[...zak].filter(v=>!jeCisloPozadavku(v)).sort((a,b)=>a.localeCompare(b,'cs'));
-  STIT_NAPOVEDA=[...stit].sort((a,b)=>a.localeCompare(b,'cs'));
-  // datalisty necháváme PRÁZDNÉ – naplní se až při psaní (žádný obří seznam na kliknutí)
-  document.getElementById('zakazky-list').innerHTML='';
-  document.getElementById('stitky-list').innerHTML='';
+  vse.forEach(p=>{ if(p.zakazka) addZ(p.zakazka, p.zakazka); if(p.stitek) addS(p.stitek); });
+  ZAK_NAPOVEDA=zak.sort((a,b)=>a.v.localeCompare(b.v,'cs'));
+  STIT_NAPOVEDA=stit.sort((a,b)=>a.v.localeCompare(b.v,'cs'));
 }
-// Našeptá až od 2 napsaných znaků; ukáže max 12 shod. Dokud nepíšeš, nenabízí nic.
-function naseptej(el, typ){
-  const val=(el.value||'').trim().toLowerCase();
-  const dl=document.getElementById(typ==='stit'?'stitky-list':'zakazky-list');
-  if(!dl) return;
-  if(val.length<2){ dl.innerHTML=''; return; }
-  const zdroj = typ==='stit' ? STIT_NAPOVEDA : ZAK_NAPOVEDA;
-  dl.innerHTML = zdroj.filter(v=>v.toLowerCase().includes(val)).slice(0,12).map(v=>`<option value="${esc(v)}">`).join('');
+
+// Ukáže návrhy až od 2 znaků; hledá podle KAŽDÉHO slova, bez ohledu na háčky a velikost písmen.
+function acShow(el, typ){
+  acTarget=el;
+  const pop=document.getElementById('ac-pop');
+  const q=(el.value||'').trim();
+  if(q.length<2){ pop.style.display='none'; return; }
+  const toks=norm_(q).split(/\s+/).filter(Boolean);
+  const src=(typ==='stit'?STIT_NAPOVEDA:ZAK_NAPOVEDA);
+  const res=[], seen={};
+  for(let i=0;i<src.length;i++){
+    const c=src[i];
+    if(toks.every(t=>c.h.indexOf(t)!==-1)){ if(!seen[c.v]){ seen[c.v]=1; res.push(c.v); } if(res.length>=12) break; }
+  }
+  if(!res.length){ pop.style.display='none'; return; }
+  pop.innerHTML=res.map(v=>`<div onmousedown="acPick(event,this)">${esc(v)}</div>`).join('');
+  const r=el.getBoundingClientRect();
+  pop.style.left=(window.scrollX+r.left)+'px';
+  pop.style.top=(window.scrollY+r.bottom+2)+'px';
+  pop.style.minWidth=Math.max(r.width,180)+'px';
+  pop.style.display='block';
 }
+function acPick(ev, div){
+  ev.preventDefault(); // ať se nezavře dřív, než vyberu
+  if(!acTarget) return;
+  acTarget.value=div.textContent;
+  acTarget.dispatchEvent(new Event('change')); // spustí uložení (nastav_zakazka)
+  document.getElementById('ac-pop').style.display='none';
+}
+function acHide(){ setTimeout(()=>{ const p=document.getElementById('ac-pop'); if(p) p.style.display='none'; }, 160); }
 
 function renderPriority(vse){
   const otevrene=vse.filter(p=>{const s=(p.stav||'otevřeno');return s!=='hotovo' && s!=='skryto' && !(s==='odloženo' && p.pripomenout_od && new Date(p.pripomenout_od)>new Date());});
@@ -1015,7 +1040,7 @@ function karta(p){
   // zatřiďovací ovládání — na stejném řádku jako odznaky a „Od:" (našeptávač u zakázky)
   const sel=(opts,val,oc)=> `<select onchange="${oc}('${p.id}',this.value)">`+opts.map(o=>`<option value="${o[0]}" ${val===o[0]?'selected':''}>${o[1]}</option>`).join('')+`</select>`;
   const soukr=(p.scope==='soukromé');
-  const zakInput=`<input list="${soukr?'stitky-list':'zakazky-list'}" oninput="naseptej(this,'${soukr?'stit':'zak'}')" placeholder="${soukr?'štítek (auto, dům…)':'zakázka – stačí psát, našeptá'}" value="${esc(soukr?(p.stitek||''):(p.zakazka||''))}" onchange="nastav_zakazka('${p.id}',this.value)">`;
+  const zakInput=`<input oninput="acShow(this,'${soukr?'stit':'zak'}')" onfocus="acShow(this,'${soukr?'stit':'zak'}')" onblur="acHide()" autocomplete="off" placeholder="${soukr?'štítek (auto, dům…)':'zakázka – stačí psát, našeptá'}" value="${esc(soukr?(p.stitek||''):(p.zakazka||''))}" onchange="nastav_zakazka('${p.id}',this.value)">`;
   const editControls=
     sel([['','— scope —'],['firemní','🏢 firemní'],['soukromé','🏠 soukromé']], p.scope||'', 'nastav_scope')
     + sel([['','— kategorie —'],['k odpovědi','K odpovědi'],['čekám','Čekám'],['dořešit','Dořešit'],['termín','Termín'],['úkol','Úkol']], p.kategorie||'', 'nastav_kat')
