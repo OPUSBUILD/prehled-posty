@@ -398,7 +398,7 @@ body:not(.prihlasen) #main-obsah{display:none}
    Čte kolekci "prehled" (plní ji Apps Script z fází 1–3) + zakázky.
    Nic neodesílá ani nezakládá samo — vše je návrh ke schválení.
    ========================================================= */
-const APP_VERSION = 'v1.9';
+const APP_VERSION = 'v1.10';
 // Spuštění synchronizace na serveru (Apps Script Web App). URL si appka pamatuje v prohlížeči
 // (nastavíš ho tlačítkem ⚙️). Token musí být stejný jako WEB_TOKEN ve skriptu.
 const SYNC_TOKEN = 'opus-sync-2026';
@@ -828,17 +828,18 @@ function renderZakazkaFilter(vse){
   sel.innerHTML=opts.join(''); sel.value=cur;
 }
 
-// Našeptávač: nabídne všechny dosud zadané zakázky (i z Evidence zakázek) a štítky
+// Našeptávač: nabídne názvy zakázek/štítků – NE číselná ID požadavků (těch jsou stovky)
+function jeCisloPozadavku(v){ return /^\d{3,7}$/.test(String(v).trim()); } // čistě 3–7místné číslo = ID požadavku
 function naplnDatalist(vse){
   const zak=new Set(), stit=new Set();
   // zakázky z Evidence zakázek (adresa = název zakázky)
   ['pozadavky','vyfakturovane','stornovane'].forEach(klic=>{
     (zakazkyData[klic]||[]).forEach(z=>{ if(z && z.adresa) zak.add(String(z.adresa).trim()); });
   });
-  // už použité hodnoty z přehledu
-  vse.forEach(p=>{ if(p.zakazka) zak.add(p.zakazka); if(p.stitek) stit.add(p.stitek); });
+  // už použité hodnoty z přehledu (ale ne číselná ID požadavků)
+  vse.forEach(p=>{ if(p.zakazka && !jeCisloPozadavku(p.zakazka)) zak.add(p.zakazka); if(p.stitek) stit.add(p.stitek); });
   const opt = v => `<option value="${esc(v)}">`;
-  document.getElementById('zakazky-list').innerHTML=[...zak].sort((a,b)=>a.localeCompare(b,'cs')).map(opt).join('');
+  document.getElementById('zakazky-list').innerHTML=[...zak].filter(v=>!jeCisloPozadavku(v)).sort((a,b)=>a.localeCompare(b,'cs')).map(opt).join('');
   document.getElementById('stitky-list').innerHTML=[...stit].sort((a,b)=>a.localeCompare(b,'cs')).map(opt).join('');
 }
 
