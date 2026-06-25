@@ -398,7 +398,7 @@ body:not(.prihlasen) #main-obsah{display:none}
    Čte kolekci "prehled" (plní ji Apps Script z fází 1–3) + zakázky.
    Nic neodesílá ani nezakládá samo — vše je návrh ke schválení.
    ========================================================= */
-const APP_VERSION = 'v1.6';
+const APP_VERSION = 'v1.7';
 // Spuštění synchronizace na serveru (Apps Script Web App). URL si appka pamatuje v prohlížeči
 // (nastavíš ho tlačítkem ⚙️). Token musí být stejný jako WEB_TOKEN ve skriptu.
 const SYNC_TOKEN = 'opus-sync-2026';
@@ -799,7 +799,7 @@ function skocNaSekci(id){
 }
 
 function renderStats(vse){
-  const otevrene=vse.filter(p=>(p.stav||'otevřeno')!=='hotovo');
+  const otevrene=vse.filter(p=>{const s=(p.stav||'otevřeno');return s!=='hotovo' && s!=='skryto';});
   const pocet=z=> otevrene.filter(p=>(p.zdroj||'')===z).length;
   const def=[
     {z:'e-mail', scls:'sc-reply', lbl:'📨 Pošta'},
@@ -841,7 +841,7 @@ function naplnDatalist(vse){
 }
 
 function renderPriority(vse){
-  const otevrene=vse.filter(p=>(p.stav||'otevřeno')!=='hotovo' && !(p.stav==='odloženo' && p.pripomenout_od && new Date(p.pripomenout_od)>new Date()));
+  const otevrene=vse.filter(p=>{const s=(p.stav||'otevřeno');return s!=='hotovo' && s!=='skryto' && !(s==='odloženo' && p.pripomenout_od && new Date(p.pripomenout_od)>new Date());});
   const skore=p=>{
     let s=0;
     if(p.kategorie==='k odpovědi') s+=40;
@@ -1182,7 +1182,7 @@ function vytvoritUkol(id){
 
 /* ===================== RANNÍ SOUHRN (EmailJS) ===================== */
 function sestavHtmlSouhrn(){
-  const vse=vsechnyPolozky().filter(p=>(p.stav||'otevřeno')!=='hotovo' && !mailMimoOkno(p));
+  const vse=vsechnyPolozky().filter(p=>((p.stav||'otevřeno')!=='hotovo' && (p.stav||'otevřeno')!=='skryto') && !mailMimoOkno(p));
   const sek=(k)=> {
     const items=vse.filter(p=>(p.kategorie||'')===k);
     if(!items.length) return '';
