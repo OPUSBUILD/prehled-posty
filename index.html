@@ -398,7 +398,7 @@ body:not(.prihlasen) #main-obsah{display:none}
    Čte kolekci "prehled" (plní ji Apps Script z fází 1–3) + zakázky.
    Nic neodesílá ani nezakládá samo — vše je návrh ke schválení.
    ========================================================= */
-const APP_VERSION = 'v1.7';
+const APP_VERSION = 'v1.9';
 // Spuštění synchronizace na serveru (Apps Script Web App). URL si appka pamatuje v prohlížeči
 // (nastavíš ho tlačítkem ⚙️). Token musí být stejný jako WEB_TOKEN ve skriptu.
 const SYNC_TOKEN = 'opus-sync-2026';
@@ -576,10 +576,12 @@ function zakPolozky(){
     else if(poTermínu){ kategorie='termín'; titulek='Zakázka po termínu'; }
     else return; // ostatní stavy se do přehledu netahají
     const nazev=[z.adresa,z.popis].filter(Boolean).join(' — ') || ('Zakázka '+(z.id||''));
+    // do sloupce "Zakázka / štítek" dáváme ČÍSLO POŽADAVKU (ne adresu) – adresa zůstává v názvu
+    const cisloPozadavku=(z.cislo||z.pozadavek||z.cislo_pozadavku||z.id||'').toString().trim();
     out.push({
       id:'zak_'+(z.id||nazev).toString().replace(/[^A-Za-z0-9_-]/g,'_'),
       zdroj:'zakázka', kategorie, titulek:titulek+': '+nazev,
-      protistrana:z.technik||'', scope:'firemní', zakazka:(z.adresa||nazev),
+      protistrana:z.technik||'', scope:'firemní', zakazka:(cisloPozadavku||z.adresa||nazev),
       stitek:'', priorita: poTermínu?'vysoká':(z.priorita||''),
       termin:z.termin||'', odkaz:'https://opusbuild.github.io/evidence-zakazek/',
       stav:'otevřeno', poprve_videno:'', vyrizeno:'', _zak:true, _stavZak:stav
@@ -1183,26 +1185,116 @@ function vytvoritUkol(id){
 /* ===================== RANNÍ SOUHRN (EmailJS) ===================== */
 function sestavHtmlSouhrn(){
   const vse=vsechnyPolozky().filter(p=>((p.stav||'otevřeno')!=='hotovo' && (p.stav||'otevřeno')!=='skryto') && !mailMimoOkno(p));
-  const sek=(k)=> {
+
+  // barvy podle kategorie (tmavá = text/pruh, světlá = pozadí kartičky)
+  const BARVA={
+    'k odpovědi':{t:'#dc2626',bg:'#fef2f2'},
+    'dořešit'   :{t:'#ea580c',bg:'#fff7ed'},
+    'termín'    :{t:'#2563eb',bg:'#eff6ff'},
+    'čekám'     :{t:'#a16207',bg:'#fefce8'},
+    'úkol'      :{t:'#7c3aed',bg:'#f5f3ff'}
+  };
+  const pocet=k=> vse.filter(p=>(p.kategorie||'')===k).length;
+
+  // ---- HLAVIČKA ----
+  const dnesText=new Date().toLocaleDateString('cs-CZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const cas=new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
+  const header=`
+  <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background:#1f3864;border-radius:10px 10px 0 0">
+    <tr>
+      <td style="padding:18px 22px">
+        <div style="color:#fff;font-size:20px;font-weight:800;letter-spacing:.3px">OPUS BUILD s.r.o.</div>
+        <div style="color:#cfe0f5;font-size:12px;margin-top:3px">📨 Přehled pošty — denní souhrn</div>
+      </td>
+      <td style="padding:18px 22px;text-align:right;vertical-align:top">
+        <div style="color:#fff;font-size:13px;font-weight:600">${esc(dnesText)}</div>
+        <div style="color:#cfe0f5;font-size:11px;margin-top:3px">Vygenerováno v ${cas}</div>
+      </td>
+    </tr>
+  </table>`;
+
+  // ---- KARTIČKY S POČTY ----
+  const karta=(k)=>{
+    const b=BARVA[k]; const n=pocet(k);
+    return `<td width="20%" style="padding:5px">
+      <div style="background:${b.bg};border-radius:9px;padding:11px 8px;text-align:center">
+        <div style="color:${b.t};font-size:11px;font-weight:700;line-height:1.2;min-height:26px">${esc(KAT[k].label)}</div>
+        <div style="color:${b.t};font-size:26px;font-weight:800;margin-top:3px">${n}</div>
+      </div></td>`;
+  };
+  const karty=`
+  <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:14px 0 4px">
+    <tr>${KAT_PORADI.map(karta).join('')}</tr>
+  </table>`;
+
+  // ---- DNEŠNÍ PRIORITY ----
+  const skore=p=>{
+    let s=0;
+    if(p.kategorie==='k odpovědi') s+=40;
+    if(p.kategorie==='dořešit') s+=25;
+    if(p.termin){ const diff=(new Date(p.termin)-new Date())/(864e5); if(diff<0)s+=60; else if(diff<=1)s+=45; else if(diff<=3)s+=30; else if(diff<=7)s+=12; }
+    s+=(4-prioVaha(p.priorita))*8;
+    return s;
+  };
+  const top=vse.map(p=>({p,s:skore(p)})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s).slice(0,5);
+  let prioBox='';
+  if(top.length){
+    const li=top.map(x=>{
+      const p=x.p; const kde=p.zakazka||p.stitek||''; const t=p.termin?(' · '+termTxt(p.termin).txt):'';
+      return `<li style="margin:3px 0;color:#7c2d12"><b style="color:#431407">${esc(p.titulek||'(bez názvu)')}</b>${kde?(' — '+esc(kde)):''}${esc(t)}</li>`;
+    }).join('');
+    prioBox=`
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:10px 0">
+      <tr><td style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:12px 16px">
+        <div style="color:#9a3412;font-size:14px;font-weight:800;margin-bottom:6px">🎯 Dnešní priority</div>
+        <ol style="margin:0;padding-left:20px;font-size:13px;line-height:1.6">${li}</ol>
+      </td></tr>
+    </table>`;
+  }
+
+  // ---- SEKCE PO KATEGORIÍCH ----
+  const sek=(k)=>{
     const items=vse.filter(p=>(p.kategorie||'')===k);
     if(!items.length) return '';
-    let rows=items.map(p=>{
+    const b=BARVA[k];
+    const rows=items.map(p=>{
       const t=p.termin?termTxt(p.termin).txt:'';
-      return `<tr><td style="padding:5px 8px;border-bottom:1px solid #eee">${esc(p.titulek||'')}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid #eee;color:#555">${esc(p.protistrana||'')}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid #eee;color:#555">${esc(p.zakazka||p.stitek||'')}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid #eee">${esc(t)}</td></tr>`;
+      return `<tr>
+        <td style="padding:7px 10px;border-bottom:1px solid #eef0f3;font-size:12.5px;color:#1a1a2e">${esc(p.titulek||'')}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #eef0f3;font-size:12px;color:#555">${esc(p.protistrana||'')}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #eef0f3;font-size:12px;color:#555">${esc(p.zakazka||p.stitek||'')}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #eef0f3;font-size:12px;color:#1a1a2e;white-space:nowrap">${esc(t)}</td>
+      </tr>`;
     }).join('');
-    return `<h3 style="color:#1f3864;font-size:14px;margin:14px 0 4px">${KAT[k].label} (${items.length})</h3>
-      <table style="width:100%;border-collapse:collapse;font-size:12px"><tr style="background:#f3f5f7">
-      <th style="text-align:left;padding:5px 8px">Položka</th><th style="text-align:left;padding:5px 8px">Od/komu</th>
-      <th style="text-align:left;padding:5px 8px">Zakázka/štítek</th><th style="text-align:left;padding:5px 8px">Termín</th></tr>${rows}</table>`;
+    return `
+    <div style="margin:16px 0 0">
+      <div style="background:${b.t};color:#fff;font-size:13.5px;font-weight:700;padding:8px 14px;border-radius:8px 8px 0 0">
+        ${esc(KAT[k].label)} <span style="background:rgba(255,255,255,.25);border-radius:20px;padding:1px 9px;font-size:12px;margin-left:4px">${items.length}</span>
+      </div>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #eef0f3;border-top:none;border-radius:0 0 8px 8px">
+        <tr style="background:#f7f9fb">
+          <th style="text-align:left;padding:6px 10px;font-size:11px;color:#6b7280;font-weight:700">Položka</th>
+          <th style="text-align:left;padding:6px 10px;font-size:11px;color:#6b7280;font-weight:700">Od / komu</th>
+          <th style="text-align:left;padding:6px 10px;font-size:11px;color:#6b7280;font-weight:700">Zakázka / štítek</th>
+          <th style="text-align:left;padding:6px 10px;font-size:11px;color:#6b7280;font-weight:700">Termín</th>
+        </tr>
+        ${rows}
+      </table>
+    </div>`;
   };
   let body=KAT_PORADI.map(sek).join('');
-  if(!body) body='<p style="color:#666">Žádné otevřené položky. 🎉</p>';
-  return `<div style="font-family:Segoe UI,Arial,sans-serif;max-width:680px;margin:auto">
-    <h2 style="color:#1f3864">📨 Přehled pošty — ranní souhrn</h2>${body}
-    <p style="font-size:11px;color:#999;margin-top:16px">Automatický souhrn z aplikace Přehled pošty · ${new Date().toLocaleString('cs-CZ')}</p></div>`;
+  if(!body) body='<p style="color:#16a34a;font-size:14px;text-align:center;padding:18px">Žádné otevřené položky. Máš čisto! 🎉</p>';
+
+  return `
+  <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:720px;margin:auto;background:#fff;border:1px solid #e8ecf0;border-radius:10px">
+    ${header}
+    <div style="padding:6px 18px 20px">
+      ${karty}
+      ${prioBox}
+      ${body}
+      <p style="font-size:11px;color:#9aa6b2;margin-top:18px;text-align:center">Automatický souhrn z aplikace Přehled pošty · ${esc(dnesText)} ${cas}</p>
+    </div>
+  </div>`;
 }
 async function odeslatSouhrn(manual){
   try{
