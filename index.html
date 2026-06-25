@@ -320,7 +320,7 @@ body:not(.prihlasen) #main-obsah{display:none}
       <label>Zařazení</label>
       <select id="nu-scope"><option value="firemní">🏢 firemní</option><option value="soukromé">🏠 soukromé</option></select>
       <label>Zakázka / štítek (našeptává)</label>
-      <input id="nu-zakazka" list="zakazky-list" placeholder="začni psát…">
+      <input id="nu-zakazka" list="zakazky-list" oninput="naseptej(this,'zak')" placeholder="začni psát…">
       <label>Priorita</label>
       <select id="nu-priorita"><option value="">— priorita —</option><option value="vysoká">⭐ Vysoká</option><option value="střední">⭐ Střední</option><option value="nízká">⭐ Nízká</option></select>
       <div class="note-inline">Úkol se uloží do přehledu. Do Google Tasks ho přidá skript při dalším běhu. Nic se neodešle.</div>
@@ -398,7 +398,7 @@ body:not(.prihlasen) #main-obsah{display:none}
    Čte kolekci "prehled" (plní ji Apps Script z fází 1–3) + zakázky.
    Nic neodesílá ani nezakládá samo — vše je návrh ke schválení.
    ========================================================= */
-const APP_VERSION = 'v1.10';
+const APP_VERSION = 'v1.12';
 // Spuštění synchronizace na serveru (Apps Script Web App). URL si appka pamatuje v prohlížeči
 // (nastavíš ho tlačítkem ⚙️). Token musí být stejný jako WEB_TOKEN ve skriptu.
 const SYNC_TOKEN = 'opus-sync-2026';
@@ -828,19 +828,33 @@ function renderZakazkaFilter(vse){
   sel.innerHTML=opts.join(''); sel.value=cur;
 }
 
-// Našeptávač: nabídne názvy zakázek/štítků – NE číselná ID požadavků (těch jsou stovky)
+// Našeptávač: nabídne názvy AKTIVNÍCH zakázek/štítků – NE číselná ID, a teprve když uživatel píše (≥2 znaky)
 function jeCisloPozadavku(v){ return /^\d{3,7}$/.test(String(v).trim()); } // čistě 3–7místné číslo = ID požadavku
+let ZAK_NAPOVEDA=[], STIT_NAPOVEDA=[];   // seznamy názvů pro našeptávání
 function naplnDatalist(vse){
   const zak=new Set(), stit=new Set();
-  // zakázky z Evidence zakázek (adresa = název zakázky)
-  ['pozadavky','vyfakturovane','stornovane'].forEach(klic=>{
-    (zakazkyData[klic]||[]).forEach(z=>{ if(z && z.adresa) zak.add(String(z.adresa).trim()); });
+  // jen AKTIVNÍ zakázky z Evidence (vyfakturované/stornované/dokončené už nenabízíme)
+  (zakazkyData.pozadavky||[]).forEach(z=>{
+    if(!z || !z.adresa) return;
+    if(UZAVRENE_ZAK.includes((z.stav||'').trim())) return;
+    zak.add(String(z.adresa).trim());
   });
   // už použité hodnoty z přehledu (ale ne číselná ID požadavků)
   vse.forEach(p=>{ if(p.zakazka && !jeCisloPozadavku(p.zakazka)) zak.add(p.zakazka); if(p.stitek) stit.add(p.stitek); });
-  const opt = v => `<option value="${esc(v)}">`;
-  document.getElementById('zakazky-list').innerHTML=[...zak].filter(v=>!jeCisloPozadavku(v)).sort((a,b)=>a.localeCompare(b,'cs')).map(opt).join('');
-  document.getElementById('stitky-list').innerHTML=[...stit].sort((a,b)=>a.localeCompare(b,'cs')).map(opt).join('');
+  ZAK_NAPOVEDA=[...zak].filter(v=>!jeCisloPozadavku(v)).sort((a,b)=>a.localeCompare(b,'cs'));
+  STIT_NAPOVEDA=[...stit].sort((a,b)=>a.localeCompare(b,'cs'));
+  // datalisty necháváme PRÁZDNÉ – naplní se až při psaní (žádný obří seznam na kliknutí)
+  document.getElementById('zakazky-list').innerHTML='';
+  document.getElementById('stitky-list').innerHTML='';
+}
+// Našeptá až od 2 napsaných znaků; ukáže max 12 shod. Dokud nepíšeš, nenabízí nic.
+function naseptej(el, typ){
+  const val=(el.value||'').trim().toLowerCase();
+  const dl=document.getElementById(typ==='stit'?'stitky-list':'zakazky-list');
+  if(!dl) return;
+  if(val.length<2){ dl.innerHTML=''; return; }
+  const zdroj = typ==='stit' ? STIT_NAPOVEDA : ZAK_NAPOVEDA;
+  dl.innerHTML = zdroj.filter(v=>v.toLowerCase().includes(val)).slice(0,12).map(v=>`<option value="${esc(v)}">`).join('');
 }
 
 function renderPriority(vse){
@@ -1001,7 +1015,7 @@ function karta(p){
   // zatřiďovací ovládání — na stejném řádku jako odznaky a „Od:" (našeptávač u zakázky)
   const sel=(opts,val,oc)=> `<select onchange="${oc}('${p.id}',this.value)">`+opts.map(o=>`<option value="${o[0]}" ${val===o[0]?'selected':''}>${o[1]}</option>`).join('')+`</select>`;
   const soukr=(p.scope==='soukromé');
-  const zakInput=`<input list="${soukr?'stitky-list':'zakazky-list'}" placeholder="${soukr?'štítek (auto, dům…)':'zakázka – stačí psát, našeptá'}" value="${esc(soukr?(p.stitek||''):(p.zakazka||''))}" onchange="nastav_zakazka('${p.id}',this.value)">`;
+  const zakInput=`<input list="${soukr?'stitky-list':'zakazky-list'}" oninput="naseptej(this,'${soukr?'stit':'zak'}')" placeholder="${soukr?'štítek (auto, dům…)':'zakázka – stačí psát, našeptá'}" value="${esc(soukr?(p.stitek||''):(p.zakazka||''))}" onchange="nastav_zakazka('${p.id}',this.value)">`;
   const editControls=
     sel([['','— scope —'],['firemní','🏢 firemní'],['soukromé','🏠 soukromé']], p.scope||'', 'nastav_scope')
     + sel([['','— kategorie —'],['k odpovědi','K odpovědi'],['čekám','Čekám'],['dořešit','Dořešit'],['termín','Termín'],['úkol','Úkol']], p.kategorie||'', 'nastav_kat')
