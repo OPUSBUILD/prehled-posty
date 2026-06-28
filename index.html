@@ -159,6 +159,12 @@ body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f0f2f5;
 .edit-row input{flex:1;min-width:150px}
 .note-inline{font-size:11px;color:#9a3412;background:#fff7ed;border:1px dashed #fdba74;border-radius:7px;padding:6px 9px;margin-top:9px}
 
+/* ===== DIALOG TISKU ===== */
+.tisk-check-row{display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 2px;cursor:pointer;color:#1a1a2e;user-select:none}
+.tisk-check-row input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:#1f3864;flex-shrink:0}
+.tisk-sub-indent{margin-left:22px;padding-left:10px;border-left:2px solid #e8ecf0;margin-top:2px;margin-bottom:4px}
+.tisk-sekce-nadpis{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8a93a0;font-weight:700;margin:12px 0 4px}
+
 /* ===== LOGIN ===== */
 #login-screen{position:fixed;inset:0;background:linear-gradient(135deg,#1f3864 0%,#2e75b6 100%);display:flex;align-items:center;justify-content:center;z-index:1000}
 #login-box{background:#fff;border-radius:16px;padding:34px 30px;width:330px;box-shadow:0 20px 60px rgba(0,0,0,.3);text-align:center}
@@ -189,10 +195,6 @@ body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f0f2f5;
 
 body:not(.prihlasen) #main-obsah{display:none}
 @media(max-width:640px){.wrap{padding:12px 12px 50px}.header{padding:12px 14px}.stats,.filters{padding-left:14px;padding-right:14px}}
-#ac-pop{position:absolute;z-index:2000;background:#fff;border:1px solid #cfd6dd;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.16);max-height:260px;overflow:auto;display:none}
-#ac-pop div{padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid #f0f2f5;color:#1f3864}
-#ac-pop div:last-child{border-bottom:none}
-#ac-pop div:hover{background:#eef2f7}
 </style>
 </head>
 <body>
@@ -228,7 +230,7 @@ body:not(.prihlasen) #main-obsah{display:none}
       <button class="btn" style="background:#2563eb;color:#fff" onclick="oteviNovaUdalost()">📅 Událost</button>
       <button class="btn" style="background:#0891b2;color:#fff" onclick="oteviNovyEmail()">✉️ E-mail</button>
       <button class="btn btn-light" onclick="aktualizovat()">🔄 Aktualizovat</button>
-      <button class="btn btn-light" onclick="window.print()" title="Vytisknout, co je právě vidět (i podle filtru)">🖨️ Tisk</button>
+      <button class="btn btn-light" onclick="oteviTiskDialog()" title="Vybrat sekce a vytisknout">🖨️ Tisk</button>
       <button class="btn btn-purple" id="btn-souhrn" onclick="odeslatSouhrn(true)" style="display:none">📧 Poslat souhrn</button>
       <button class="btn btn-light" id="btn-sync" onclick="nastavSync()" title="Nastavit odkaz na synchronizaci (spuštění z tlačítka Aktualizovat)" style="display:none">⚙️</button>
       <a class="btn btn-light" href="https://opusbuild.github.io/evidence-zakazek/" target="_blank">📋 Evidence zakázek</a>
@@ -257,7 +259,6 @@ body:not(.prihlasen) #main-obsah{display:none}
     </select>
     <input id="filter-search" placeholder="🔎 Hledat…" oninput="render()" style="min-width:160px">
     <button class="btn btn-sm" id="btn-neprectene" onclick="prepniNeprectene()" style="background:#dbeafe;color:#1e40af">🔵 Nepřečtené</button>
-    <button class="btn btn-sm" id="btn-starsi" onclick="prepniStarsi()" style="display:none;background:#e8ecf0;color:#1a1a2e">🗂 Starší pošta</button>
     <button class="btn btn-gray btn-sm" onclick="zrusitFiltry()">✕ Zrušit filtry</button>
   </div>
   </div><!-- /topbar -->
@@ -324,7 +325,7 @@ body:not(.prihlasen) #main-obsah{display:none}
       <label>Zařazení</label>
       <select id="nu-scope"><option value="firemní">🏢 firemní</option><option value="soukromé">🏠 soukromé</option></select>
       <label>Zakázka / štítek (našeptává)</label>
-      <input id="nu-zakazka" autocomplete="off" oninput="acShow(this,'zak')" onfocus="acShow(this,'zak')" onblur="acHide()" placeholder="začni psát…">
+      <input id="nu-zakazka" list="zakazky-list" placeholder="začni psát…">
       <label>Priorita</label>
       <select id="nu-priorita"><option value="">— priorita —</option><option value="vysoká">⭐ Vysoká</option><option value="střední">⭐ Střední</option><option value="nízká">⭐ Nízká</option></select>
       <div class="note-inline">Úkol se uloží do přehledu. Do Google Tasks ho přidá skript při dalším běhu. Nic se neodešle.</div>
@@ -391,9 +392,45 @@ body:not(.prihlasen) #main-obsah{display:none}
   </div>
 </div>
 
+<!-- ===================== MODAL: TISK ===================== -->
+<div class="modal" id="modal-tisk">
+  <div class="modal-box" style="width:440px">
+    <div class="modal-head">🖨️ Co chcete vytisknout?</div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:#6b7280;margin-bottom:14px">Zaškrtněte sekce, které mají být součástí tisku. Ostatní se přeskočí.</div>
+      <label class="tisk-check-row" id="tisk-lbl-prio" style="font-weight:700;margin-bottom:8px">
+        <input type="checkbox" id="tisk-prio" checked> 🎯 Dnešní priority
+      </label>
+      <div class="tisk-sekce-nadpis">Pošta a komunikace</div>
+      <label class="tisk-check-row" id="tisk-lbl-mail" style="font-weight:700">
+        <input type="checkbox" id="tisk-band-mail" checked onchange="tiskniBandToggle('mail',this.checked)"> 📨 Pošta
+      </label>
+      <div class="tisk-sub-indent" id="tisk-subs-mail">
+        <label class="tisk-check-row" id="tisk-lbl-kodp"><input type="checkbox" id="tisk-sub-kodp" checked> Na co musím odpovědět</label>
+        <label class="tisk-check-row" id="tisk-lbl-doresit"><input type="checkbox" id="tisk-sub-doresit" checked> Co musím dořešit</label>
+        <label class="tisk-check-row" id="tisk-lbl-cekam"><input type="checkbox" id="tisk-sub-cekam" checked> Na co čekám odpověď</label>
+        <label class="tisk-check-row" id="tisk-lbl-ostpost"><input type="checkbox" id="tisk-sub-ostpost" checked> Ostatní pošta (jen pro informaci)</label>
+      </div>
+      <div class="tisk-sekce-nadpis" style="margin-top:10px">Ostatní sekce</div>
+      <label class="tisk-check-row" id="tisk-lbl-cal" style="font-weight:700"><input type="checkbox" id="tisk-band-cal" checked> 📅 Kalendář</label>
+      <label class="tisk-check-row" id="tisk-lbl-task" style="font-weight:700;margin-top:3px"><input type="checkbox" id="tisk-band-task" checked> ✅ Úkoly</label>
+      <label class="tisk-check-row" id="tisk-lbl-zak" style="font-weight:700;margin-top:3px"><input type="checkbox" id="tisk-band-zak" checked> 🏗️ Termíny a zakázky</label>
+    </div>
+    <div class="modal-foot" style="justify-content:space-between;align-items:center">
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" style="background:#f1f5f9;color:#374151" onclick="tisknoutVse()">☑ Vše</button>
+        <button class="btn btn-sm" style="background:#f1f5f9;color:#374151" onclick="tisknoutNic()">☐ Nic</button>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-gray" onclick="zavri('modal-tisk')">Zrušit</button>
+        <button class="btn btn-success" onclick="potvrditTisk()">🖨️ Vytisknout</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <datalist id="zakazky-list"></datalist>
 <datalist id="stitky-list"></datalist>
-<div id="ac-pop"></div>
 <div id="toast"></div>
 
 <script>
@@ -403,13 +440,10 @@ body:not(.prihlasen) #main-obsah{display:none}
    Čte kolekci "prehled" (plní ji Apps Script z fází 1–3) + zakázky.
    Nic neodesílá ani nezakládá samo — vše je návrh ke schválení.
    ========================================================= */
-const APP_VERSION = 'v1.13';
+const APP_VERSION = 'v1.14';
 // Spuštění synchronizace na serveru (Apps Script Web App). URL si appka pamatuje v prohlížeči
 // (nastavíš ho tlačítkem ⚙️). Token musí být stejný jako WEB_TOKEN ve skriptu.
 const SYNC_TOKEN = 'opus-sync-2026';
-// Horizont pošty: kolik dní zpět ukazovat e-maily v hlavním přehledu.
-// Starší pošta se schová (zůstává jedním klikem dostupná). Klidně změň na 7 (přísnější) nebo 30 (mírnější).
-const MAIL_OKNO_DNI = 14;
 
 // ---- Firebase (stejný projekt jako Evidence zakázek) ----
 const firebaseConfig = {
@@ -446,7 +480,6 @@ let aktivniScope = '';
 let aktivniKategorie = ''; // filtr ze stat karet (kategorie) – zachováno pro kompatibilitu
 let aktivniZdroj = '';     // filtr ze stat karet (zdroj/pásmo)
 let jenNeprectene = false; // filtr: zobrazit jen nepřečtené e-maily
-let zobrazitStarsiPostu = false; // když true, dočasně ukáže i poštu starší než MAIL_OKNO_DNI
 let aktualniOdpoved = null; // id položky, ke které píšu odpověď
 
 // Kategorie: klíč -> {label, css, badge}
@@ -581,12 +614,10 @@ function zakPolozky(){
     else if(poTermínu){ kategorie='termín'; titulek='Zakázka po termínu'; }
     else return; // ostatní stavy se do přehledu netahají
     const nazev=[z.adresa,z.popis].filter(Boolean).join(' — ') || ('Zakázka '+(z.id||''));
-    // do sloupce "Zakázka / štítek" dáváme ČÍSLO POŽADAVKU (ne adresu) – adresa zůstává v názvu
-    const cisloPozadavku=(z.cislo||z.pozadavek||z.cislo_pozadavku||z.id||'').toString().trim();
     out.push({
       id:'zak_'+(z.id||nazev).toString().replace(/[^A-Za-z0-9_-]/g,'_'),
       zdroj:'zakázka', kategorie, titulek:titulek+': '+nazev,
-      protistrana:z.technik||'', scope:'firemní', zakazka:(cisloPozadavku||z.adresa||nazev),
+      protistrana:z.technik||'', scope:'firemní', zakazka:(z.adresa||nazev),
       stitek:'', priorita: poTermínu?'vysoká':(z.priorita||''),
       termin:z.termin||'', odkaz:'https://opusbuild.github.io/evidence-zakazek/',
       stav:'otevřeno', poprve_videno:'', vyrizeno:'', _zak:true, _stavZak:stav
@@ -603,13 +634,7 @@ function vsechnyPolozky(){
     if(map[z.id]) map[z.id]={...z, ...map[z.id], _zak:true, titulek:z.titulek, termin:z.termin, zakazka:z.zakazka};
     else map[z.id]=z;
   });
-  // Kalendář: prošlé události (termín před dneškem) už nepřipomínáme — schůzka buď proběhla, nebo ne.
-  // Necháváme jen DNEŠNÍ a BUDOUCÍ. Týká se VÝHRADNĚ kalendáře; e-maily, úkoly i zakázky zůstávají beze změny.
-  return Object.values(map).filter(p=>{
-    if(p.zdroj!=='kalendář') return true;
-    const d=dniOd(p.termin);   // >0 = minulost, 0 = dnes, <0 = budoucnost, null = neznámé datum
-    return !(d!==null && d>0);
-  });
+  return Object.values(map);
 }
 
 /* ===================== POMOCNÉ ===================== */
@@ -656,7 +681,7 @@ function prepniNeprectene(){
   render();
 }
 function zrusitFiltry(){
-  aktivniScope=''; aktivniKategorie=''; aktivniZdroj=''; jenNeprectene=false; zobrazitStarsiPostu=false;
+  aktivniScope=''; aktivniKategorie=''; aktivniZdroj=''; jenNeprectene=false;
   const b=document.getElementById('btn-neprectene'); b.style.background='#dbeafe'; b.style.color='#1e40af';
   document.getElementById('filter-zakazka').value='';
   document.getElementById('filter-stav').value='otevrene';
@@ -687,50 +712,12 @@ function projdeFiltr(p){
   return true;
 }
 
-/* ===== HORIZONT POŠTY (ať přehled nepřetéká starou poštou) ===== */
-// E-mail starší než MAIL_OKNO_DNI dní se v hlavním (otevřeném) pohledu schová.
-// Týká se VÝHRADNĚ pošty; kalendář, úkoly a zakázky zůstávají.
-function mailMimoOkno(p){
-  if(p.zdroj!=='e-mail') return false;
-  const zaklad = (p.datum || p.poprve_videno || '').slice(0,10);
-  const d = dniOd(zaklad);            // >0 = v minulosti; null = neznámé datum (nechá zobrazené)
-  return d!==null && d>MAIL_OKNO_DNI;
-}
-// Horizont platí jen v běžném „Otevřené" pohledu – při hledání, výběru zakázky
-// nebo jiném stavovém filtru se zruší, ať najdeš i starší poštu.
-function horizontZapnuty(){
-  if(zobrazitStarsiPostu) return false;
-  if(document.getElementById('filter-stav').value!=='otevrene') return false;
-  if(document.getElementById('filter-search').value.trim()) return false;
-  if(document.getElementById('filter-zakazka').value) return false;
-  return true;
-}
-function prepniStarsi(){
-  zobrazitStarsiPostu = !zobrazitStarsiPostu;
-  render();
-}
-function aktualizujTlacitkoStarsi(pocetSkrytych){
-  const b=document.getElementById('btn-starsi'); if(!b) return;
-  if(zobrazitStarsiPostu){
-    b.textContent='🗂 Skrýt starší poštu';
-    b.style.background='#1e40af'; b.style.color='#fff'; b.style.display='inline-flex';
-  } else if(pocetSkrytych>0){
-    b.textContent='🗂 Starší pošta ('+pocetSkrytych+')';
-    b.style.background='#e8ecf0'; b.style.color='#1a1a2e'; b.style.display='inline-flex';
-  } else {
-    b.style.display='none';
-  }
-}
-
 /* ===================== RENDER ===================== */
 function render(){
-  const vseFull=vsechnyPolozky();
-  const horizont=horizontZapnuty();
-  const vse = horizont ? vseFull.filter(p=>!mailMimoOkno(p)) : vseFull;
-  aktualizujTlacitkoStarsi(horizont ? vseFull.filter(mailMimoOkno).length : 0);
+  const vse=vsechnyPolozky();
   renderStats(vse);
-  renderZakazkaFilter(vseFull);
-  naplnDatalist(vseFull);
+  renderZakazkaFilter(vse);
+  naplnDatalist(vse);
   renderPriority(vse);
 
   const viditelne=vse.filter(projdeFiltr);
@@ -754,28 +741,32 @@ function render(){
   // ===== PÁSMO 1: POŠTA (e-maily) — nahoře, to je smysl projektu =====
   const mail = viditelne.filter(p=>p.zdroj==='e-mail');
   if(mail.length){
+    html += '<div class="tisk-band" data-band="mail">';
     html += band('📨 Pošta', mail.length, 'nb-mail');
-    [['k odpovědi','Na co musím odpovědět','ns-kodp'],['dořešit','Co musím dořešit','ns-doresit'],['čekám','Na co čekám odpověď','ns-cekam']]
-      .forEach(([k,lbl,id])=>{ const it=triditMail(mail.filter(p=>(p.kategorie||'')===k)); if(it.length){ html+=subt(lbl,it.length,id)+vykresli(it); } });
+    [['k odpovědi','Na co musím odpovědět','ns-kodp','kodp'],
+     ['dořešit','Co musím dořešit','ns-doresit','doresit'],
+     ['čekám','Na co čekám odpověď','ns-cekam','cekam']]
+      .forEach(([k,lbl,id,sub])=>{ const it=triditMail(mail.filter(p=>(p.kategorie||'')===k)); if(it.length){ html+='<div class="tisk-sub" data-sub="'+sub+'">'+subt(lbl,it.length,id)+vykresli(it)+'</div>'; } });
     const nez=triditMail(mail.filter(p=>!['k odpovědi','dořešit','čekám'].includes(p.kategorie||'')));
-    if(nez.length) html += subt('Ostatní pošta (jen pro informaci)', nez.length, 'ns-ostpost') + vykresli(nez);
+    if(nez.length) html += '<div class="tisk-sub" data-sub="ostpost">'+subt('Ostatní pošta (jen pro informaci)', nez.length, 'ns-ostpost') + vykresli(nez)+'</div>';
+    html += '</div>';
   }
 
   // ===== PÁSMO 2: KALENDÁŘ =====
   const cal = tridit(viditelne.filter(p=>p.zdroj==='kalendář'));
-  if(cal.length) html += band('📅 Kalendář', cal.length, 'nb-cal') + vykresli(cal);
+  if(cal.length){ html += '<div class="tisk-band" data-band="cal">'; html += band('📅 Kalendář', cal.length, 'nb-cal') + vykresli(cal); html += '</div>'; }
 
   // ===== PÁSMO 3: ÚKOLY (Google Tasks) =====
   const task = tridit(viditelne.filter(p=>p.zdroj==='úkol'));
-  if(task.length) html += band('✅ Úkoly', task.length, 'nb-task') + vykresli(task);
+  if(task.length){ html += '<div class="tisk-band" data-band="task">'; html += band('✅ Úkoly', task.length, 'nb-task') + vykresli(task); html += '</div>'; }
 
   // ===== PÁSMO 4: TERMÍNY A ZAKÁZKY (z Evidence zakázek) — až na konci =====
   const zak = tridit(viditelne.filter(p=>p.zdroj==='zakázka'));
-  if(zak.length) html += band('🏗️ Termíny a zakázky', zak.length, 'nb-zak') + vykresli(zak);
+  if(zak.length){ html += '<div class="tisk-band" data-band="zak">'; html += band('🏗️ Termíny a zakázky', zak.length, 'nb-zak') + vykresli(zak); html += '</div>'; }
 
   // cokoliv s neznámým zdrojem
   const ost = tridit(viditelne.filter(p=>!['e-mail','zakázka','kalendář','úkol'].includes(p.zdroj)));
-  if(ost.length) html += band('Ostatní', ost.length, 'nb-ost') + vykresli(ost);
+  if(ost.length){ html += '<div class="tisk-band" data-band="ost">'; html += band('Ostatní', ost.length, 'nb-ost') + vykresli(ost); html += '</div>'; }
 
   sekce.innerHTML = html || '<div class="empty">Žádné položky neodpovídají filtru. 🎉</div>';
   renderLevaNav(nav);
@@ -806,7 +797,7 @@ function skocNaSekci(id){
 }
 
 function renderStats(vse){
-  const otevrene=vse.filter(p=>{const s=(p.stav||'otevřeno');return s!=='hotovo' && s!=='skryto';});
+  const otevrene=vse.filter(p=>(p.stav||'otevřeno')!=='hotovo');
   const pocet=z=> otevrene.filter(p=>(p.zdroj||'')===z).length;
   const def=[
     {z:'e-mail', scls:'sc-reply', lbl:'📨 Pošta'},
@@ -833,57 +824,22 @@ function renderZakazkaFilter(vse){
   sel.innerHTML=opts.join(''); sel.value=cur;
 }
 
-// ===== VLASTNÍ NAŠEPTÁVAČ ZAKÁZEK/ŠTÍTKŮ =====
-function jeCisloPozadavku(v){ return /^\d{3,7}$/.test(String(v).trim()); } // čistě 3–7místné číslo = ID požadavku
-function norm_(s){ return (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); } // bez háčků/čárek
-let ZAK_NAPOVEDA=[], STIT_NAPOVEDA=[];   // {v:vložit, h:hledat}
-let acTarget=null;
-
-// Sestaví seznamy pro našeptávání (adresa + popis + dosud použité hodnoty; čísla požadavků vynechá)
+// Našeptávač: nabídne všechny dosud zadané zakázky (i z Evidence zakázek) a štítky
 function naplnDatalist(vse){
-  const zak=[], stit=[], zs={}, ss={};
-  const addZ=(v,h)=>{ v=(v||'').toString().trim(); if(!v||jeCisloPozadavku(v)) return; const k=v.toLowerCase(); if(zs[k])return; zs[k]=1; zak.push({v,h:norm_(h||v)}); };
-  const addS=(v)=>{ v=(v||'').toString().trim(); if(!v) return; const k=v.toLowerCase(); if(ss[k])return; ss[k]=1; stit.push({v,h:norm_(v)}); };
+  const zak=new Set(), stit=new Set();
+  // zakázky z Evidence zakázek (adresa = název zakázky)
   ['pozadavky','vyfakturovane','stornovane'].forEach(klic=>{
-    (zakazkyData[klic]||[]).forEach(z=>{ if(!z||!z.adresa) return; const a=String(z.adresa).trim(); addZ(a, a+' '+(z.popis||'')); });
+    (zakazkyData[klic]||[]).forEach(z=>{ if(z && z.adresa) zak.add(String(z.adresa).trim()); });
   });
-  vse.forEach(p=>{ if(p.zakazka) addZ(p.zakazka, p.zakazka); if(p.stitek) addS(p.stitek); });
-  ZAK_NAPOVEDA=zak.sort((a,b)=>a.v.localeCompare(b.v,'cs'));
-  STIT_NAPOVEDA=stit.sort((a,b)=>a.v.localeCompare(b.v,'cs'));
+  // už použité hodnoty z přehledu
+  vse.forEach(p=>{ if(p.zakazka) zak.add(p.zakazka); if(p.stitek) stit.add(p.stitek); });
+  const opt = v => `<option value="${esc(v)}">`;
+  document.getElementById('zakazky-list').innerHTML=[...zak].sort((a,b)=>a.localeCompare(b,'cs')).map(opt).join('');
+  document.getElementById('stitky-list').innerHTML=[...stit].sort((a,b)=>a.localeCompare(b,'cs')).map(opt).join('');
 }
-
-// Ukáže návrhy až od 2 znaků; hledá podle KAŽDÉHO slova, bez ohledu na háčky a velikost písmen.
-function acShow(el, typ){
-  acTarget=el;
-  const pop=document.getElementById('ac-pop');
-  const q=(el.value||'').trim();
-  if(q.length<2){ pop.style.display='none'; return; }
-  const toks=norm_(q).split(/\s+/).filter(Boolean);
-  const src=(typ==='stit'?STIT_NAPOVEDA:ZAK_NAPOVEDA);
-  const res=[], seen={};
-  for(let i=0;i<src.length;i++){
-    const c=src[i];
-    if(toks.every(t=>c.h.indexOf(t)!==-1)){ if(!seen[c.v]){ seen[c.v]=1; res.push(c.v); } if(res.length>=12) break; }
-  }
-  if(!res.length){ pop.style.display='none'; return; }
-  pop.innerHTML=res.map(v=>`<div onmousedown="acPick(event,this)">${esc(v)}</div>`).join('');
-  const r=el.getBoundingClientRect();
-  pop.style.left=(window.scrollX+r.left)+'px';
-  pop.style.top=(window.scrollY+r.bottom+2)+'px';
-  pop.style.minWidth=Math.max(r.width,180)+'px';
-  pop.style.display='block';
-}
-function acPick(ev, div){
-  ev.preventDefault(); // ať se nezavře dřív, než vyberu
-  if(!acTarget) return;
-  acTarget.value=div.textContent;
-  acTarget.dispatchEvent(new Event('change')); // spustí uložení (nastav_zakazka)
-  document.getElementById('ac-pop').style.display='none';
-}
-function acHide(){ setTimeout(()=>{ const p=document.getElementById('ac-pop'); if(p) p.style.display='none'; }, 160); }
 
 function renderPriority(vse){
-  const otevrene=vse.filter(p=>{const s=(p.stav||'otevřeno');return s!=='hotovo' && s!=='skryto' && !(s==='odloženo' && p.pripomenout_od && new Date(p.pripomenout_od)>new Date());});
+  const otevrene=vse.filter(p=>(p.stav||'otevřeno')!=='hotovo' && !(p.stav==='odloženo' && p.pripomenout_od && new Date(p.pripomenout_od)>new Date()));
   const skore=p=>{
     let s=0;
     if(p.kategorie==='k odpovědi') s+=40;
@@ -1040,7 +996,7 @@ function karta(p){
   // zatřiďovací ovládání — na stejném řádku jako odznaky a „Od:" (našeptávač u zakázky)
   const sel=(opts,val,oc)=> `<select onchange="${oc}('${p.id}',this.value)">`+opts.map(o=>`<option value="${o[0]}" ${val===o[0]?'selected':''}>${o[1]}</option>`).join('')+`</select>`;
   const soukr=(p.scope==='soukromé');
-  const zakInput=`<input oninput="acShow(this,'${soukr?'stit':'zak'}')" onfocus="acShow(this,'${soukr?'stit':'zak'}')" onblur="acHide()" autocomplete="off" placeholder="${soukr?'štítek (auto, dům…)':'zakázka – stačí psát, našeptá'}" value="${esc(soukr?(p.stitek||''):(p.zakazka||''))}" onchange="nastav_zakazka('${p.id}',this.value)">`;
+  const zakInput=`<input list="${soukr?'stitky-list':'zakazky-list'}" placeholder="${soukr?'štítek (auto, dům…)':'zakázka – stačí psát, našeptá'}" value="${esc(soukr?(p.stitek||''):(p.zakazka||''))}" onchange="nastav_zakazka('${p.id}',this.value)">`;
   const editControls=
     sel([['','— scope —'],['firemní','🏢 firemní'],['soukromé','🏠 soukromé']], p.scope||'', 'nastav_scope')
     + sel([['','— kategorie —'],['k odpovědi','K odpovědi'],['čekám','Čekám'],['dořešit','Dořešit'],['termín','Termín'],['úkol','Úkol']], p.kategorie||'', 'nastav_kat')
@@ -1224,117 +1180,27 @@ function vytvoritUkol(id){
 
 /* ===================== RANNÍ SOUHRN (EmailJS) ===================== */
 function sestavHtmlSouhrn(){
-  const vse=vsechnyPolozky().filter(p=>((p.stav||'otevřeno')!=='hotovo' && (p.stav||'otevřeno')!=='skryto') && !mailMimoOkno(p));
-
-  // barvy podle kategorie (tmavá = text/pruh, světlá = pozadí kartičky)
-  const BARVA={
-    'k odpovědi':{t:'#dc2626',bg:'#fef2f2'},
-    'dořešit'   :{t:'#ea580c',bg:'#fff7ed'},
-    'termín'    :{t:'#2563eb',bg:'#eff6ff'},
-    'čekám'     :{t:'#a16207',bg:'#fefce8'},
-    'úkol'      :{t:'#7c3aed',bg:'#f5f3ff'}
-  };
-  const pocet=k=> vse.filter(p=>(p.kategorie||'')===k).length;
-
-  // ---- HLAVIČKA ----
-  const dnesText=new Date().toLocaleDateString('cs-CZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  const cas=new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
-  const header=`
-  <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background:#1f3864;border-radius:10px 10px 0 0">
-    <tr>
-      <td style="padding:18px 22px">
-        <div style="color:#fff;font-size:20px;font-weight:800;letter-spacing:.3px">OPUS BUILD s.r.o.</div>
-        <div style="color:#cfe0f5;font-size:12px;margin-top:3px">📨 Přehled pošty — denní souhrn</div>
-      </td>
-      <td style="padding:18px 22px;text-align:right;vertical-align:top">
-        <div style="color:#fff;font-size:13px;font-weight:600">${esc(dnesText)}</div>
-        <div style="color:#cfe0f5;font-size:11px;margin-top:3px">Vygenerováno v ${cas}</div>
-      </td>
-    </tr>
-  </table>`;
-
-  // ---- KARTIČKY S POČTY ----
-  const karta=(k)=>{
-    const b=BARVA[k]; const n=pocet(k);
-    return `<td width="20%" style="padding:5px">
-      <div style="background:${b.bg};border-radius:9px;padding:11px 8px;text-align:center">
-        <div style="color:${b.t};font-size:11px;font-weight:700;line-height:1.2;min-height:26px">${esc(KAT[k].label)}</div>
-        <div style="color:${b.t};font-size:26px;font-weight:800;margin-top:3px">${n}</div>
-      </div></td>`;
-  };
-  const karty=`
-  <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:14px 0 4px">
-    <tr>${KAT_PORADI.map(karta).join('')}</tr>
-  </table>`;
-
-  // ---- DNEŠNÍ PRIORITY ----
-  const skore=p=>{
-    let s=0;
-    if(p.kategorie==='k odpovědi') s+=40;
-    if(p.kategorie==='dořešit') s+=25;
-    if(p.termin){ const diff=(new Date(p.termin)-new Date())/(864e5); if(diff<0)s+=60; else if(diff<=1)s+=45; else if(diff<=3)s+=30; else if(diff<=7)s+=12; }
-    s+=(4-prioVaha(p.priorita))*8;
-    return s;
-  };
-  const top=vse.map(p=>({p,s:skore(p)})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s).slice(0,5);
-  let prioBox='';
-  if(top.length){
-    const li=top.map(x=>{
-      const p=x.p; const kde=p.zakazka||p.stitek||''; const t=p.termin?(' · '+termTxt(p.termin).txt):'';
-      return `<li style="margin:3px 0;color:#7c2d12"><b style="color:#431407">${esc(p.titulek||'(bez názvu)')}</b>${kde?(' — '+esc(kde)):''}${esc(t)}</li>`;
-    }).join('');
-    prioBox=`
-    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:10px 0">
-      <tr><td style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:12px 16px">
-        <div style="color:#9a3412;font-size:14px;font-weight:800;margin-bottom:6px">🎯 Dnešní priority</div>
-        <ol style="margin:0;padding-left:20px;font-size:13px;line-height:1.6">${li}</ol>
-      </td></tr>
-    </table>`;
-  }
-
-  // ---- SEKCE PO KATEGORIÍCH ----
-  const sek=(k)=>{
+  const vse=vsechnyPolozky().filter(p=>(p.stav||'otevřeno')!=='hotovo');
+  const sek=(k)=> {
     const items=vse.filter(p=>(p.kategorie||'')===k);
     if(!items.length) return '';
-    const b=BARVA[k];
-    const rows=items.map(p=>{
+    let rows=items.map(p=>{
       const t=p.termin?termTxt(p.termin).txt:'';
-      return `<tr>
-        <td style="padding:7px 10px;border-bottom:1px solid #eef0f3;font-size:12.5px;color:#1a1a2e">${esc(p.titulek||'')}</td>
-        <td style="padding:7px 10px;border-bottom:1px solid #eef0f3;font-size:12px;color:#555">${esc(p.protistrana||'')}</td>
-        <td style="padding:7px 10px;border-bottom:1px solid #eef0f3;font-size:12px;color:#555">${esc(p.zakazka||p.stitek||'')}</td>
-        <td style="padding:7px 10px;border-bottom:1px solid #eef0f3;font-size:12px;color:#1a1a2e;white-space:nowrap">${esc(t)}</td>
-      </tr>`;
+      return `<tr><td style="padding:5px 8px;border-bottom:1px solid #eee">${esc(p.titulek||'')}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid #eee;color:#555">${esc(p.protistrana||'')}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid #eee;color:#555">${esc(p.zakazka||p.stitek||'')}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid #eee">${esc(t)}</td></tr>`;
     }).join('');
-    return `
-    <div style="margin:16px 0 0">
-      <div style="background:${b.t};color:#fff;font-size:13.5px;font-weight:700;padding:8px 14px;border-radius:8px 8px 0 0">
-        ${esc(KAT[k].label)} <span style="background:rgba(255,255,255,.25);border-radius:20px;padding:1px 9px;font-size:12px;margin-left:4px">${items.length}</span>
-      </div>
-      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #eef0f3;border-top:none;border-radius:0 0 8px 8px">
-        <tr style="background:#f7f9fb">
-          <th style="text-align:left;padding:6px 10px;font-size:11px;color:#6b7280;font-weight:700">Položka</th>
-          <th style="text-align:left;padding:6px 10px;font-size:11px;color:#6b7280;font-weight:700">Od / komu</th>
-          <th style="text-align:left;padding:6px 10px;font-size:11px;color:#6b7280;font-weight:700">Zakázka / štítek</th>
-          <th style="text-align:left;padding:6px 10px;font-size:11px;color:#6b7280;font-weight:700">Termín</th>
-        </tr>
-        ${rows}
-      </table>
-    </div>`;
+    return `<h3 style="color:#1f3864;font-size:14px;margin:14px 0 4px">${KAT[k].label} (${items.length})</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:12px"><tr style="background:#f3f5f7">
+      <th style="text-align:left;padding:5px 8px">Položka</th><th style="text-align:left;padding:5px 8px">Od/komu</th>
+      <th style="text-align:left;padding:5px 8px">Zakázka/štítek</th><th style="text-align:left;padding:5px 8px">Termín</th></tr>${rows}</table>`;
   };
   let body=KAT_PORADI.map(sek).join('');
-  if(!body) body='<p style="color:#16a34a;font-size:14px;text-align:center;padding:18px">Žádné otevřené položky. Máš čisto! 🎉</p>';
-
-  return `
-  <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:720px;margin:auto;background:#fff;border:1px solid #e8ecf0;border-radius:10px">
-    ${header}
-    <div style="padding:6px 18px 20px">
-      ${karty}
-      ${prioBox}
-      ${body}
-      <p style="font-size:11px;color:#9aa6b2;margin-top:18px;text-align:center">Automatický souhrn z aplikace Přehled pošty · ${esc(dnesText)} ${cas}</p>
-    </div>
-  </div>`;
+  if(!body) body='<p style="color:#666">Žádné otevřené položky. 🎉</p>';
+  return `<div style="font-family:Segoe UI,Arial,sans-serif;max-width:680px;margin:auto">
+    <h2 style="color:#1f3864">📨 Přehled pošty — ranní souhrn</h2>${body}
+    <p style="font-size:11px;color:#999;margin-top:16px">Automatický souhrn z aplikace Přehled pošty · ${new Date().toLocaleString('cs-CZ')}</p></div>`;
 }
 async function odeslatSouhrn(manual){
   try{
@@ -1370,6 +1236,64 @@ function showToast(msg, ok, err){
   clearTimeout(window._toastT); window._toastT=setTimeout(()=>t.className=t.className.replace('show','').trim(), 3200);
 }
 document.querySelectorAll('.modal').forEach(m=> m.addEventListener('click', e=>{ if(e.target===m) m.classList.remove('open'); }));
+
+/* ===================== TISK — DIALOG ===================== */
+function oteviTiskDialog(){
+  // reset: vše zaškrtnuto, povoleno
+  document.querySelectorAll('#modal-tisk input[type=checkbox]').forEach(cb=>{ cb.checked=true; cb.disabled=false; });
+  document.querySelectorAll('#modal-tisk label[id]').forEach(l=>l.style.opacity='1');
+  // Prio box: viditelný jen když existuje
+  const pb=document.getElementById('prio-box');
+  _tiskSetAvail('tisk-prio','tisk-lbl-prio', pb && pb.style.display!=='none');
+  // Pásma — jen pokud jsou v aktuálním výpisu
+  ['mail','cal','task','zak'].forEach(b=>{
+    const ex=!!document.querySelector('.tisk-band[data-band="'+b+'"]');
+    _tiskSetAvail('tisk-band-'+b,'tisk-lbl-'+b, ex);
+  });
+  // Podsekce pošty
+  ['kodp','doresit','cekam','ostpost'].forEach(s=>{
+    const ex=!!document.querySelector('.tisk-sub[data-sub="'+s+'"]');
+    _tiskSetAvail('tisk-sub-'+s,'tisk-lbl-'+s, ex);
+  });
+  otevri('modal-tisk');
+}
+function _tiskSetAvail(cbId,lblId,avail){
+  const cb=document.getElementById(cbId), lb=document.getElementById(lblId);
+  if(cb){ cb.disabled=!avail; if(!avail) cb.checked=false; }
+  if(lb) lb.style.opacity=avail?'1':'0.38';
+}
+function tiskniBandToggle(band,checked){
+  const s=document.getElementById('tisk-subs-'+band); if(!s) return;
+  s.querySelectorAll('input[type=checkbox]').forEach(cb=>{ if(!cb.disabled) cb.checked=checked; });
+}
+function tisknoutVse(){
+  document.querySelectorAll('#modal-tisk input[type=checkbox]').forEach(cb=>{ if(!cb.disabled) cb.checked=true; });
+  tiskniBandToggle('mail',true);
+}
+function tisknoutNic(){
+  document.querySelectorAll('#modal-tisk input[type=checkbox]').forEach(cb=>{ if(!cb.disabled) cb.checked=false; });
+}
+function potvrditTisk(){
+  const toRestore=[];
+  function skryj(el){ if(el&&el.style.display!=='none'){ toRestore.push([el,el.style.display]); el.style.display='none'; } }
+  // Dnešní priority
+  if(!document.getElementById('tisk-prio').checked) skryj(document.getElementById('prio-box'));
+  // Pásma a podsekce
+  document.querySelectorAll('.tisk-band').forEach(band=>{
+    const bCb=document.getElementById('tisk-band-'+band.dataset.band);
+    if(bCb&&!bCb.checked){ skryj(band); return; }
+    band.querySelectorAll('.tisk-sub').forEach(sub=>{
+      const sCb=document.getElementById('tisk-sub-'+sub.dataset.sub);
+      if(sCb&&!sCb.checked) skryj(sub);
+    });
+  });
+  zavri('modal-tisk');
+  let obnoveno=false;
+  const obnov=()=>{ if(obnoveno)return; obnoveno=true; toRestore.forEach(([el,d])=>el.style.display=d); };
+  window.addEventListener('afterprint', obnov, {once:true});
+  setTimeout(()=>{ window.print(); setTimeout(obnov,500); }, 80);
+}
+
 </script>
 </body>
 </html>
