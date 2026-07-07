@@ -456,7 +456,7 @@ body:not(.prihlasen) #main-obsah{display:none}
    z ní vycházejí — proto vždy sedí.
    Nic se neodesílá ani nezakládá samo — vše je návrh ke schválení.
    ========================================================= */
-const APP_VERSION = 'v2.2';
+const APP_VERSION = 'v2.3';
 const SYNC_TOKEN = 'opus-sync-2026';
 
 // ---- Firebase (stejný projekt jako Evidence zakázek) ----
@@ -1344,9 +1344,10 @@ function sestavHtmlSouhrn(){
       return radek(B.ukol, esc(p.titulek||''), (t?esc(t.txt):'bez termínu')+((p.zakazka||p.stitek)?' &nbsp;·&nbsp; '+esc(p.zakazka||p.stitek):''));
     });
 
-  return `<div style="font-family:Segoe UI,Arial,sans-serif;max-width:680px;margin:auto">
+  return `<table width="680" align="center" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-family:Segoe UI,Arial,sans-serif"><tr><td>
     ${header}${karty}${prioBox}${body||'<p style="color:#666">Žádné otevřené položky. 🎉</p>'}
-    <p style="font-size:11px;color:#999;margin-top:16px">Automatický souhrn z aplikace Přehled pošty ${APP_VERSION} · ${new Date().toLocaleString('cs-CZ')}</p></div>`;
+    <p style="font-size:11px;color:#999;margin-top:16px">Automatický souhrn z aplikace Přehled pošty ${APP_VERSION} · ${new Date().toLocaleString('cs-CZ')}</p>
+  </td></tr></table>`;
 }
 async function odeslatSouhrn(manual){
   try{
