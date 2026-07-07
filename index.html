@@ -456,7 +456,7 @@ body:not(.prihlasen) #main-obsah{display:none}
    z ní vycházejí — proto vždy sedí.
    Nic se neodesílá ani nezakládá samo — vše je návrh ke schválení.
    ========================================================= */
-const APP_VERSION = 'v2.0.1';
+const APP_VERSION = 'v2.1';
 const SYNC_TOKEN = 'opus-sync-2026';
 
 // ---- Firebase (stejný projekt jako Evidence zakázek) ----
@@ -1237,18 +1237,30 @@ function vytvoritUkol(id){
 }
 
 /* ===================== RANNÍ SOUHRN (EmailJS) ===================== */
-const SOUHRN_BARVA={
-  'k odpovědi':{t:'#d92d20',bg:'#fef3f2'},
-  'dořešit'   :{t:'#e8590c',bg:'#fff4ec'},
-  'čekám'     :{t:'#b45309',bg:'#fffaeb'},
-  'termín'    :{t:'#1d4ed8',bg:'#eff4ff'},
-  'úkol'      :{t:'#6d28d9',bg:'#f5f1fe'}
-};
-const SOUHRN_PORADI=['k odpovědi','dořešit','termín','čekám','úkol'];
+// Kompaktní, akční souhrn: barevný proužek podle kategorie, titulek + drobný
+// řádek „od koho · termín". Termíny jen 7 dní dopředu, max 10 řádků na oddíl.
 function sestavHtmlSouhrn(){
   const vse=vsechnyPolozky().filter(jeAktivni);
-  const dleKat=k=> vse.filter(p=>(p.kategorie||'')===k);
+  const dnes=new Date(); dnes.setHours(0,0,0,0);
+  const za7=new Date(dnes); za7.setDate(za7.getDate()+7);
 
+  // ---- výběry do oddílů ----
+  const kodp   = vse.filter(p=>p.zdroj==='e-mail' && (p.kategorie||'')==='k odpovědi');
+  const doresit= vse.filter(p=>p.zdroj==='e-mail' && (p.kategorie||'')==='dořešit');
+  const cekam  = vse.filter(p=>p.zdroj==='e-mail' && (p.kategorie||'')==='čekám')
+                    .sort((a,b)=>(dniOd(b.datum||b.poprve_videno)||0)-(dniOd(a.datum||a.poprve_videno)||0));
+  const terminy= vse.filter(p=>{
+                    if(!p.termin || p.zdroj==='e-mail' || p.zdroj==='úkol') return false;
+                    const t=new Date(p.termin);
+                    if(p.zdroj==='kalendář') return t>=dnes && t<=za7;       // kalendář: jen týden dopředu
+                    return t<=za7;                                            // zakázky: i po termínu
+                  }).sort((a,b)=>new Date(a.termin)-new Date(b.termin));
+  const ukoly  = vse.filter(p=>p.zdroj==='úkol')
+                    .sort((a,b)=>{const ta=a.termin?new Date(a.termin):Infinity,tb=b.termin?new Date(b.termin):Infinity;return ta-tb;});
+
+  const B={kodp:'#d92d20',doresit:'#e8590c',cekam:'#b45309',term:'#1d4ed8',ukol:'#6d28d9'};
+
+  // ---- hlavička ----
   const dnesText=new Date().toLocaleDateString('cs-CZ',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const cas=new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
   const header=`
@@ -1265,16 +1277,16 @@ function sestavHtmlSouhrn(){
     </tr>
   </table>`;
 
-  const kartaHtml=k=>{
-    const b=SOUHRN_BARVA[k]; const n=dleKat(k).length;
-    return `<td width="20%" style="padding:5px">
-      <div style="background:${b.bg};border-radius:9px;padding:11px 8px;text-align:center">
-        <div style="color:${b.t};font-size:11px;font-weight:700;line-height:1.2;min-height:26px">${esc(KAT[k].label)}</div>
-        <div style="color:${b.t};font-size:26px;font-weight:800;margin-top:3px">${n}</div>
-      </div></td>`;
-  };
-  const karty=`<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:14px 0 4px"><tr>${SOUHRN_PORADI.map(kartaHtml).join('')}</tr></table>`;
+  // ---- kartičky s počty ----
+  const kart=[['K odpovědi',kodp.length,B.kodp,'#fef3f2'],['Dořešit',doresit.length,B.doresit,'#fff4ec'],
+              ['Čekám',cekam.length,B.cekam,'#fffaeb'],['Termíny 7 dní',terminy.length,B.term,'#eff4ff'],['Úkoly',ukoly.length,B.ukol,'#f5f1fe']];
+  const karty=`<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:14px 0 4px"><tr>`
+    + kart.map(k=>`<td width="20%" style="padding:5px"><div style="background:${k[3]};border-radius:9px;padding:10px 6px;text-align:center">
+        <div style="color:${k[2]};font-size:11px;font-weight:700;line-height:1.2">${k[0]}</div>
+        <div style="color:${k[2]};font-size:26px;font-weight:800;margin-top:2px">${k[1]}</div></div></td>`).join('')
+    + `</tr></table>`;
 
+  // ---- dnešní priority ----
   const top=vse.map(p=>({p,s:prioSkore(p)})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s).slice(0,5);
   let prioBox='';
   if(top.length){
@@ -1287,28 +1299,47 @@ function sestavHtmlSouhrn(){
       <ol style="margin:0 0 0 18px;padding:0;color:#7c2d12;font-size:13px">${li}</ol></div>`;
   }
 
-  const sek=k=>{
-    const items=dleKat(k);
+  // ---- kompaktní řádek položky: titulek + drobný podřádek ----
+  const radek=(barva,hlavni,vedlejsi)=>`<tr><td style="border-left:4px solid ${barva};background:#f8fafc;padding:7px 10px 7px 12px">
+      <span style="font-weight:700;color:#152238;font-size:13px">${hlavni}</span>
+      ${vedlejsi?`<br><span style="font-size:11px;color:#64748b">${vedlejsi}</span>`:''}</td></tr>
+      <tr><td style="height:5px;line-height:5px;font-size:5px">&nbsp;</td></tr>`;
+  const blok=(nadpis,barva,items,radFn)=>{
     if(!items.length) return '';
-    const b=SOUHRN_BARVA[k];
-    const MAXR=12;
-    const rows=items.slice(0,MAXR).map(p=>{
-      const t=p.termin?termTxt(p.termin).txt:'';
-      return `<tr><td style="padding:5px 8px;border-bottom:1px solid #eee">${esc(p.titulek||'')}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid #eee;color:#555">${esc(p.protistrana||'')}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid #eee;color:#555">${esc(p.zakazka||p.stitek||'')}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid #eee">${esc(t)}</td></tr>`;
-    }).join('');
-    const zbytek=items.length>MAXR?`<tr><td colspan="4" style="padding:6px 8px;color:#888;font-style:italic">… a dalších ${items.length-MAXR} položek — viz appka</td></tr>`:'';
-    return `<h3 style="color:${b.t};font-size:14px;margin:16px 0 4px;border-left:4px solid ${b.t};padding-left:8px">${esc(KAT[k].label)} (${items.length})</h3>
-      <table style="width:100%;border-collapse:collapse;font-size:12px"><tr style="background:#f3f5f7">
-      <th style="text-align:left;padding:5px 8px">Položka</th><th style="text-align:left;padding:5px 8px">Od/komu</th>
-      <th style="text-align:left;padding:5px 8px">Zakázka/štítek</th><th style="text-align:left;padding:5px 8px">Termín</th></tr>${rows}${zbytek}</table>`;
+    const MAXR=10;
+    const rows=items.slice(0,MAXR).map(radFn).join('');
+    const zbytek=items.length>MAXR?`<tr><td style="padding:3px 12px;color:#94a3b8;font-size:11px;font-style:italic">… a dalších ${items.length-MAXR} — viz appka</td></tr>`:'';
+    return `<h3 style="color:${barva};font-size:14px;margin:18px 0 7px">${nadpis} (${items.length})</h3>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">${rows}${zbytek}</table>`;
   };
-  let body=SOUHRN_PORADI.map(sek).join('');
-  if(!body) body='<p style="color:#666">Žádné otevřené položky. 🎉</p>';
+  const kdoTermin=(p,predpona)=>{
+    const kusy=[];
+    if(p.protistrana) kusy.push(predpona+' '+esc(p.protistrana));
+    if(p.zakazka||p.stitek) kusy.push(esc(p.zakazka||p.stitek));
+    return kusy.join(' &nbsp;·&nbsp; ');
+  };
+
+  const body =
+    blok('🔴 Na co musím odpovědět', B.kodp, kodp, p=>{
+      const dni=dniOd(p.datum||p.poprve_videno);
+      return radek(B.kodp, esc(p.titulek||''), kdoTermin(p,'Od:')+(dni!=null&&dni>=1?' &nbsp;·&nbsp; čeká '+dnyTxt(dni):''));
+    })
+    + blok('🟠 Co musím dořešit', B.doresit, doresit, p=> radek(B.doresit, esc(p.titulek||''), kdoTermin(p,'Od:')))
+    + blok('🟡 Na co čekám odpověď', B.cekam, cekam, p=>{
+      const dni=dniOd(p.datum||p.poprve_videno);
+      return radek(B.cekam, esc(p.titulek||''), kdoTermin(p,'Komu:')+(dni!=null?' &nbsp;·&nbsp; čekám '+dnyTxt(dni):''));
+    })
+    + blok('🔵 Termíny do 7 dnů', B.term, terminy, p=>{
+      const t=termTxt(p.termin);
+      return radek(B.term, esc(p.titulek||''), esc(t?t.txt:'')+(p.misto?' &nbsp;·&nbsp; '+esc(p.misto):''));
+    })
+    + blok('🟣 Úkoly', B.ukol, ukoly, p=>{
+      const t=p.termin?termTxt(p.termin):null;
+      return radek(B.ukol, esc(p.titulek||''), (t?esc(t.txt):'bez termínu')+((p.zakazka||p.stitek)?' &nbsp;·&nbsp; '+esc(p.zakazka||p.stitek):''));
+    });
+
   return `<div style="font-family:Segoe UI,Arial,sans-serif;max-width:680px;margin:auto">
-    ${header}${karty}${prioBox}${body}
+    ${header}${karty}${prioBox}${body||'<p style="color:#666">Žádné otevřené položky. 🎉</p>'}
     <p style="font-size:11px;color:#999;margin-top:16px">Automatický souhrn z aplikace Přehled pošty ${APP_VERSION} · ${new Date().toLocaleString('cs-CZ')}</p></div>`;
 }
 async function odeslatSouhrn(manual){
