@@ -456,7 +456,7 @@ body:not(.prihlasen) #main-obsah{display:none}
    z ní vycházejí — proto vždy sedí.
    Nic se neodesílá ani nezakládá samo — vše je návrh ke schválení.
    ========================================================= */
-const APP_VERSION = 'v2.0';
+const APP_VERSION = 'v2.0.1';
 const SYNC_TOKEN = 'opus-sync-2026';
 
 // ---- Firebase (stejný projekt jako Evidence zakázek) ----
@@ -1291,17 +1291,19 @@ function sestavHtmlSouhrn(){
     const items=dleKat(k);
     if(!items.length) return '';
     const b=SOUHRN_BARVA[k];
-    const rows=items.map(p=>{
+    const MAXR=12;
+    const rows=items.slice(0,MAXR).map(p=>{
       const t=p.termin?termTxt(p.termin).txt:'';
       return `<tr><td style="padding:5px 8px;border-bottom:1px solid #eee">${esc(p.titulek||'')}</td>
         <td style="padding:5px 8px;border-bottom:1px solid #eee;color:#555">${esc(p.protistrana||'')}</td>
         <td style="padding:5px 8px;border-bottom:1px solid #eee;color:#555">${esc(p.zakazka||p.stitek||'')}</td>
         <td style="padding:5px 8px;border-bottom:1px solid #eee">${esc(t)}</td></tr>`;
     }).join('');
+    const zbytek=items.length>MAXR?`<tr><td colspan="4" style="padding:6px 8px;color:#888;font-style:italic">… a dalších ${items.length-MAXR} položek — viz appka</td></tr>`:'';
     return `<h3 style="color:${b.t};font-size:14px;margin:16px 0 4px;border-left:4px solid ${b.t};padding-left:8px">${esc(KAT[k].label)} (${items.length})</h3>
       <table style="width:100%;border-collapse:collapse;font-size:12px"><tr style="background:#f3f5f7">
       <th style="text-align:left;padding:5px 8px">Položka</th><th style="text-align:left;padding:5px 8px">Od/komu</th>
-      <th style="text-align:left;padding:5px 8px">Zakázka/štítek</th><th style="text-align:left;padding:5px 8px">Termín</th></tr>${rows}</table>`;
+      <th style="text-align:left;padding:5px 8px">Zakázka/štítek</th><th style="text-align:left;padding:5px 8px">Termín</th></tr>${rows}${zbytek}</table>`;
   };
   let body=SOUHRN_PORADI.map(sek).join('');
   if(!body) body='<p style="color:#666">Žádné otevřené položky. 🎉</p>';
@@ -1319,7 +1321,13 @@ async function odeslatSouhrn(manual){
     });
     localStorage.setItem(klic,'1');
     if(manual) showToast('✅ Souhrn odeslán',true);
-  }catch(e){ console.error(e); if(manual) showToast('⚠️ Souhrn se nepodařilo odeslat',false,true); }
+  }catch(e){
+    console.error(e);
+    if(manual){
+      const duvod=(e && (e.text||e.message)) ? String(e.text||e.message).slice(0,160) : 'neznámá chyba';
+      showToast('⚠️ Souhrn se nepodařilo odeslat: '+duvod, false, true);
+    }
+  }
 }
 function naplanujRanniMail(){
   if(window._mailNaplanovan) return; window._mailNaplanovan=true;
